@@ -226,7 +226,8 @@ def main(args):
     else:
         with multiprocessing.Pool(pool_size, initializer=_init_worker,
                                    initargs=(triples, dref, new_header, ref_ranks)) as pool:
-            results = pool.map(_process_gene, gene_args)
+            chunksize = max(1, len(gene_args) // (actual_workers * 4))
+            results = pool.map(_process_gene, gene_args, chunksize=chunksize)
     print(f'Done in {time.time() - t0:.1f}s')
 
     for result in results:
@@ -235,8 +236,8 @@ def main(args):
         geneID, out_line, d_taugene, d_phgene, gene_order_probs, gene_boots = result
         out_lines.append(out_line)
         done.append(geneID)
-        d_tau = {**d_tau, geneID: d_taugene}
-        d_ph = {**d_ph, geneID: d_phgene}
+        d_tau[geneID] = d_taugene
+        d_ph[geneID] = d_phgene
         if write_pickle and 'premade' not in opt:
             d_data_master1[geneID] = d_data_master[geneID]
             d_order_probs_master[geneID] = gene_order_probs

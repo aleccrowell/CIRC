@@ -74,7 +74,11 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
     _batch_tau = _batch_tau_nb if _NUMBA else _batch_tau_numpy
 
     d_taugene, d_pergene, d_phgene, d_nagene = {}, {}, {}, {}
-    rs = []
+    # Pre-allocate rs based on total expected bootstrap rows to avoid repeated list growth.
+    counts = {kkey: int(np.round(size * dorder[kkey])) for kkey in dorder}
+    total_rows = sum(counts.values())
+    rs = np.empty((total_rows, 7))
+    rs_idx = 0
     for kkey in dorder:
         kkey_arr = np.array(kkey, dtype=np.int64)
         maxloc = new_header_arr[np.argmax(kkey_arr)]
@@ -103,9 +107,9 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
         d_pergene[r[2]] = d_pergene.get(r[2], 0) + dorder[kkey]
         d_phgene[r[3]] = d_phgene.get(r[3], 0) + dorder[kkey]
         d_nagene[r[4]] = d_nagene.get(r[4], 0) + dorder[kkey]
-        count = int(np.round(size * dorder[kkey]))
-        rs.extend([r] * count)
-    rs = np.array(rs)
+        count = counts[kkey]
+        rs[rs_idx:rs_idx + count] = r
+        rs_idx += count
     m_tau = np.mean(rs[:, 0])
     s_tau = np.std(rs[:, 0])
     m_per = np.mean(rs[:, 2])

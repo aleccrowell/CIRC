@@ -33,6 +33,10 @@ import argparse
 import time
 import os.path
 
+import hashlib
+import json
+import shutil
+from pathlib import Path
 import os
 
 from . import BooteJTK
@@ -41,6 +45,46 @@ from .limma_preprocess import prepare_timeseries, write_limma_outputs
 from .limma_voom import run_vooma_ebayes, run_vooma_vash
 
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+_NULL_CACHE_DIR = Path.home() / '.cache' / 'circ' / 'null_cache'
+
+
+def _null_cache_key(header, period_file, phase_file, width_file, waveform, reps, size, limma, vash, noreps):
+    """Return a hex digest that uniquely identifies a null distribution configuration."""
+    def _read(path):
+        try:
+            return open(path).read()
+        except (OSError, TypeError):
+            return str(path)
+
+    payload = json.dumps({
+        'header':  sorted(header),
+        'period':  _read(period_file),
+        'phase':   _read(phase_file),
+        'width':   _read(width_file),
+        'waveform': str(waveform),
+        'reps':    int(reps),
+        'size':    int(size),
+        'limma':   bool(limma),
+        'vash':    bool(vash),
+        'noreps':  bool(noreps),
+    }, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:20]
+
+
+def _cached_null_path(key):
+    # Filename must contain 'boot' so CalcP reads the TauMean column correctly.
+    return _NULL_CACHE_DIR / f'null_boot_{key}.txt'
+
+
+def _load_null_cache(key):
+    """Return path to cached null output if it exists, else None."""
+    p = _cached_null_path(key)
+    return str(p) if p.exists() else None
+
+
+def _save_null_cache(key, src_path):
+    _NULL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_path, _cached_null_path(key))
 
 def main(args):
 
@@ -139,66 +183,78 @@ def main(args):
 
     #print args.pickle
     #print args.output
-    fn_null_out = args.output
+    null_key = _null_cache_key(
+        header,
+        fn_period, fn_phase, fn_width, fn_waveform,
+        reps, size,
+        args.limma, args.vash, args.noreps,
+    )
+    fn_null_out = _load_null_cache(null_key)
 
-    fn_null = fn.replace('.txt','_NULL1000.txt')
-    
-    sims = 1000
-    with open(fn_null,'w') as g:
-        g.write('\t'.join(['#']+header)+'\n')
-        for i in range(sims):
-            line = ['wnoise_'+str(i)] + [str(v) for v in np.random.normal(0,1,len(header))]
-            g.write('\t'.join(line)+'\n')
-            
-    args.filename = fn_null
-    
-    if args.noreps==True:
-        print('No replicates, skipping Limma procedure')
-        print('Estimating time point variance from arrhythmic genes')
-        try:
-            df = pd.read_table(fn,index_col='ID')
-        except ValueError:
-            df = pd.read_table(fn,index_col='#')
-        except ValueError:
-            print('Header needs to begin with "ID" or with "#"')
-
-        j = pd.read_table(args.jtk,index_col='ID')
-        mean = df.loc[j[j.GammaP>0.8].index].std(axis=1).dropna().mean()
-
-        df_sds = pd.DataFrame(np.ones(df.shape)*mean,index=df.index,columns=df.columns)
-        df_ns =  pd.DataFrame(np.ones(df.shape),index=df.index,columns=df.columns)
-        fn_sds = fn_null.replace('.txt','_Sds_noRepsEst.txt')
-        df_sds.to_csv(fn_sds,na_rep=np.nan,sep='\t')
-        fn_ns = fn_null.replace('.txt','_Ns_noRepsEst.txt')
-        df_sds.to_csv(fn_ns,na_rep=np.nan,sep='\t')
-                      
-        args.means = fn_null
-        args.sds = fn_sds
-        args.ns = fn_ns
-    elif args.limma==True:
-        pref_null = fn_null.replace('.txt', '')
-        if args.vash==False:
-            suffix_null = 'postLimma'
-            args.means = fn_null.replace('.txt', '_Means_postLimma.txt')
-            args.sds   = fn_null.replace('.txt', '_Sds_postLimma.txt')
-            args.ns    = fn_null.replace('.txt', '_Ns_postLimma.txt')
-        else:
-            suffix_null = 'postVash'
-            args.means = fn_null.replace('.txt', '_Means_postVash.txt')
-            args.sds   = fn_null.replace('.txt', '_Sds_postVash.txt')
-            args.ns    = fn_null.replace('.txt', '_Ns_postVash.txt')
-
-        df_null_clean, _ = prepare_timeseries(fn_null, period_val)
-        preprocessor = run_vooma_vash if args.vash else run_vooma_ebayes
-        long_null = preprocessor(df_null_clean, period_val, rnaseq=args.rnaseq)
-        write_limma_outputs(long_null, pref_null, suffix_null)
+    if fn_null_out is not None:
+        print(f'Null distribution cache hit (key={null_key[:8]}...) — skipping null BooteJTK run.')
     else:
-        pass
-    
-    fn_null_out,_,_ = BooteJTK.main(args)
+        fn_null = fn.replace('.txt','_NULL1000.txt')
+
+        sims = 1000
+        with open(fn_null,'w') as g:
+            g.write('\t'.join(['#']+header)+'\n')
+            for i in range(sims):
+                line = ['wnoise_'+str(i)] + [str(v) for v in np.random.normal(0,1,len(header))]
+                g.write('\t'.join(line)+'\n')
+
+        args.filename = fn_null
+
+        if args.noreps==True:
+            print('No replicates, skipping Limma procedure')
+            print('Estimating time point variance from arrhythmic genes')
+            try:
+                df = pd.read_table(fn,index_col='ID')
+            except ValueError:
+                df = pd.read_table(fn,index_col='#')
+            except ValueError:
+                print('Header needs to begin with "ID" or with "#"')
+
+            j = pd.read_table(args.jtk,index_col='ID')
+            mean = df.loc[j[j.GammaP>0.8].index].std(axis=1).dropna().mean()
+
+            df_sds = pd.DataFrame(np.ones(df.shape)*mean,index=df.index,columns=df.columns)
+            df_ns =  pd.DataFrame(np.ones(df.shape),index=df.index,columns=df.columns)
+            fn_sds = fn_null.replace('.txt','_Sds_noRepsEst.txt')
+            df_sds.to_csv(fn_sds,na_rep=np.nan,sep='\t')
+            fn_ns = fn_null.replace('.txt','_Ns_noRepsEst.txt')
+            df_sds.to_csv(fn_ns,na_rep=np.nan,sep='\t')
+
+            args.means = fn_null
+            args.sds = fn_sds
+            args.ns = fn_ns
+        elif args.limma==True:
+            pref_null = fn_null.replace('.txt', '')
+            if args.vash==False:
+                suffix_null = 'postLimma'
+                args.means = fn_null.replace('.txt', '_Means_postLimma.txt')
+                args.sds   = fn_null.replace('.txt', '_Sds_postLimma.txt')
+                args.ns    = fn_null.replace('.txt', '_Ns_postLimma.txt')
+            else:
+                suffix_null = 'postVash'
+                args.means = fn_null.replace('.txt', '_Means_postVash.txt')
+                args.sds   = fn_null.replace('.txt', '_Sds_postVash.txt')
+                args.ns    = fn_null.replace('.txt', '_Ns_postVash.txt')
+
+            df_null_clean, _ = prepare_timeseries(fn_null, period_val)
+            preprocessor = run_vooma_vash if args.vash else run_vooma_ebayes
+            long_null = preprocessor(df_null_clean, period_val, rnaseq=args.rnaseq)
+            write_limma_outputs(long_null, pref_null, suffix_null)
+        else:
+            pass
+
+        fn_null_out,_,_ = BooteJTK.main(args)
+        _save_null_cache(null_key, fn_null_out)
+        print(f'Null distribution cached (key={null_key[:8]}...).')
+
     args.filename = fn_out
     args.null = fn_null_out
-    args.fit = ''    
+    args.fit = ''
     CalcP.main(args)
 
 
