@@ -247,6 +247,39 @@ class TestRunAll:
 # Unit tests: _make_pipeline_args helper
 # ---------------------------------------------------------------------------
 
+class TestClassifierDataFrameAndParquet:
+    def test_accepts_dataframe_run_pirs(self, simulated_expression_file):
+        df = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        clf = Classifier(df, anova=False)
+        scores = clf.run_pirs()
+        assert isinstance(scores, pd.DataFrame)
+        assert len(scores) == len(df)
+
+    def test_accepts_dataframe_run_all(self, simulated_expression_file):
+        df = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        clf = Classifier(df, size=10, reps=2)
+        result = clf.run_all()
+        assert "label" in result.columns
+        assert len(result) == len(df)
+
+    def test_filename_none_for_dataframe(self, simulated_expression_file):
+        df = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        clf = Classifier(df)
+        assert clf.filename is None
+
+    def test_filename_set_for_path(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file)
+        assert clf.filename == simulated_expression_file
+
+    def test_accepts_parquet_run_pirs(self, simulated_expression_file, tmp_path):
+        df = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        path = str(tmp_path / "expr.parquet")
+        df.to_parquet(path)
+        clf = Classifier(path, anova=False)
+        scores = clf.run_pirs()
+        assert len(scores) == len(df)
+
+
 class TestMakePipelineArgs:
     def test_returns_namespace(self):
         args = _make_pipeline_args(

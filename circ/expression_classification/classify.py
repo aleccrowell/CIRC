@@ -63,8 +63,13 @@ class Classifier:
         Parallel worker processes for BooteJTK.  0 = all CPUs (default 1).
     """
 
-    def __init__(self, filename, *, anova=False, reps=2, size=50, workers=1):
-        self.filename = os.path.abspath(filename)
+    def __init__(self, source, *, anova=False, reps=2, size=50, workers=1):
+        if isinstance(source, pd.DataFrame):
+            self._source = source
+            self.filename = None
+        else:
+            self._source = os.path.abspath(str(source))
+            self.filename = self._source
         self.anova = anova
         self.reps = reps
         self.size = size
@@ -107,7 +112,7 @@ class Classifier:
         """
         from circ.pirs.rank import ranker
 
-        r = ranker(self.filename, anova=self.anova)
+        r = ranker(self._source, anova=self.anova)
         r.get_tpoints()
         if self.anova:
             r.remove_anova()
@@ -143,8 +148,17 @@ class Classifier:
 
         workdir = tempfile.mkdtemp(prefix='circ_classify_')
         try:
-            fn_copy = os.path.join(workdir, os.path.basename(self.filename))
-            shutil.copy2(self.filename, fn_copy)
+            if isinstance(self._source, pd.DataFrame):
+                fn_copy = os.path.join(workdir, 'input.txt')
+                self._source.to_csv(fn_copy, sep='\t')
+            else:
+                src = str(self._source)
+                if src.endswith('.parquet'):
+                    fn_copy = os.path.join(workdir, 'input.txt')
+                    pd.read_parquet(src).to_csv(fn_copy, sep='\t')
+                else:
+                    fn_copy = os.path.join(workdir, os.path.basename(src))
+                    shutil.copy2(src, fn_copy)
 
             args = _make_pipeline_args(
                 filename=fn_copy,

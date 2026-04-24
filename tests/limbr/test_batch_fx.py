@@ -152,3 +152,20 @@ def test_perm_test_parallel(rnaseq_file):
     obj.perm_test(nperm=10, npr=2)
     assert len(obj.sigs) == len(obj.tks)
     assert all(0.0 <= s <= 1.0 for s in obj.sigs)
+
+
+def test_init_accepts_dataframe(rnaseq_file):
+    df = pd.read_csv(rnaseq_file, sep="\t", index_col=0)
+    obj = sva(df, design="c", data_type="r")
+    assert obj.raw_data is not None
+    assert isinstance(obj.raw_data, pd.DataFrame)
+    pd.testing.assert_frame_equal(obj.raw_data, df)
+
+
+def test_init_accepts_parquet(tmp_path, rnaseq_file):
+    df = pd.read_csv(rnaseq_file, sep="\t", index_col=0)
+    path = str(tmp_path / "rnaseq.parquet")
+    df.to_parquet(path)
+    obj = sva(path, design="c", data_type="r")
+    assert isinstance(obj.raw_data, pd.DataFrame)
+    pd.testing.assert_frame_equal(obj.raw_data, df)

@@ -90,7 +90,7 @@ class sva:
 
     """
 
-    def __init__(self, filename,design,data_type,blocks=None,pool=None):
+    def __init__(self, source, design, data_type, blocks=None, pool=None):
         """
         Imports data and initializes an sva object.
 
@@ -98,19 +98,16 @@ class sva:
         Takes a file from one of two data types protein ('p') which has two index columns or rna ('r') which has only one.  Reads a parquet file matching pooled controls to corresponding samples if data_type = 'p' and a parquet file matching samples to blocks if designtype = 'b'.
 
         """
-
+        from circ.io import read_expression
         np.random.seed(4574)
         self.data_type = str(data_type)
-        if self.data_type == 'p':
-            self.raw_data = pd.read_csv(filename,sep='\t').set_index(['Peptide','Protein'])
-        if self.data_type == 'r':
-            self.raw_data = pd.read_csv(filename,sep='\t').set_index('#')
+        self.raw_data = read_expression(source, data_type=data_type)
         self.designtype = str(design)
         if self.designtype == 'b':
             self.block_design = pd.read_parquet(blocks)['block'].tolist()
-        if pool != None:
+        if pool is not None:
             self.norm_map = pd.read_parquet(pool)['pool_number'].to_dict()
-        elif pool == None:
+        else:
             self.norm_map = None
         self.notdone = True
 
@@ -602,11 +599,15 @@ class sva:
 
         """
 
-        pd.DataFrame(self.ts,columns=self.data.columns).to_csv(outname.split('.txt')[0]+'_trends.txt',sep='\t')
-        pd.DataFrame(self.sigs).to_csv(outname.split('.txt')[0]+'_perms.txt',sep='\t')
-        pd.DataFrame(self.tks).to_csv(outname.split('.txt')[0]+'_tks.txt',sep='\t')
+        from circ.io import write_expression, sidecar_path
+        write_expression(pd.DataFrame(self.ts, columns=self.data.columns), sidecar_path(outname, '_trends'))
+        write_expression(pd.DataFrame(self.sigs), sidecar_path(outname, '_perms'))
+        write_expression(pd.DataFrame(self.tks), sidecar_path(outname, '_tks'))
         if len(self.pepts) > 0:
-            pd.DataFrame(np.asarray(self.pepts).T,index=self.data_reduced.index).to_csv(outname.split('.txt')[0]+'_pep_bias.txt',sep='\t')
+            write_expression(
+                pd.DataFrame(np.asarray(self.pepts).T, index=self.data_reduced.index),
+                sidecar_path(outname, '_pep_bias'),
+            )
         if len(self.ts) > 0:
             fin_res = np.dot(np.dot(self.data.values,np.linalg.lstsq(self.ts,np.identity(np.shape(self.ts)[0]),rcond=None)[0]),self.ts)
         else:
@@ -616,7 +617,7 @@ class sva:
         if self.data_type == 'p':
             self.svd_norm = self.svd_norm.groupby(level='Protein').mean()
         self.svd_norm.index.names = ['#']
-        self.svd_norm.to_csv(outname,sep='\t')
+        write_expression(self.svd_norm, outname)
 
     def preprocess_default(self):
         self.pool_normalize()

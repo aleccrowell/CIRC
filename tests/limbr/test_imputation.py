@@ -77,3 +77,27 @@ def test_impute_data_pipeline(imputation_file, tmp_path):
     result = pd.read_csv(out, sep="\t", index_col=[0, 1])
     assert result.isnull().sum().sum() == 0
     assert len(result) > 0
+
+
+def test_impute_writes_parquet(imputation_file, tmp_path):
+    out = str(tmp_path / "imputed.parquet")
+    obj = imputable(imputation_file, missingness=0.5, neighbors=5)
+    obj.impute_data(out)
+    result = pd.read_parquet(out)
+    assert result.isnull().sum().sum() == 0
+    assert len(result) > 0
+
+
+def test_init_accepts_dataframe(imputation_file):
+    df = pd.read_csv(imputation_file, sep="\t")
+    obj = imputable(df, missingness=0.5)
+    assert obj.data is not None
+    assert list(obj.data.columns[:2]) == ["Peptide", "Protein"]
+
+
+def test_init_accepts_multiindex_dataframe(imputation_file):
+    df = pd.read_csv(imputation_file, sep="\t").set_index(["Peptide", "Protein"])
+    obj = imputable(df, missingness=0.5)
+    # MultiIndex should have been reset to flat columns for deduplicate()
+    assert "Peptide" in obj.data.columns
+    assert "Protein" in obj.data.columns
