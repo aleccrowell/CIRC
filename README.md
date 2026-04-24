@@ -1,16 +1,17 @@
 # CIRC — Circadian Integrated Research Core
 
 CIRC is a unified Python toolkit for circadian genomics and proteomics analysis,
-integrating three complementary tools:
+integrating four complementary tools:
 
 | Module | Purpose |
 |---|---|
 | `circ.limbr` | KNN imputation + SVA-based batch effect removal |
 | `circ.pirs` | Prediction Interval Ranking Score for constitutive expression |
 | `circ.bootjtk` | Bootstrap empirical JTK circadian rhythm detection |
+| `circ.expression_classification` | Unified classifier combining PIRS and BooteJTK |
 
-A single `circ` CLI entry point wraps all three, and all modules share the same
-`ZT{HH}_{rep}` column format so outputs chain directly between steps.
+A single `circ` CLI entry point wraps all three core tools, and all modules share
+the same `ZT{HH}_{rep}` column format so outputs chain directly between steps.
 
 ## Installation
 
@@ -49,7 +50,7 @@ A typical proteomics circadian experiment:
 
 ```python
 from circ.limbr import simulations, imputation, batch_fx
-from circ.pirs import rank as pirs_rank
+from circ.expression_classification.classify import Classifier
 
 # 1. Simulate (or start from real data)
 sim = simulations.simulate(tpoints=12, nrows=500, nreps=2, rseed=42)
@@ -67,12 +68,28 @@ sva_obj.preprocess_default()
 sva_obj.perm_test(nperm=200)
 sva_obj.output_default("normalized.txt")
 
-# 4. Rank by constitutiveness
-ranker = pirs_rank.ranker("normalized.txt", anova=True)
-ranked = ranker.pirs_sort(outname="ranked_scores.txt")
+# 4. Classify expression patterns
+clf = Classifier("normalized.txt", reps=2)
+result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
+# result.label: constitutive | rhythmic | linear | variable | noisy_rhythmic
 
-# 5. Detect circadian rhythms (via CLI or directly)
-# circ rhythm-calcp -f normalized.txt -x output_prefix -r 2 -z 10
+# Constitutive genes make good normalization references
+constitutive = result[result["label"] == "constitutive"].index
+```
+
+For finer control over the PIRS step (e.g. writing ranked scores to disk):
+
+```python
+from circ.pirs.rank import ranker
+
+r = ranker("normalized.txt", anova=True)
+r.get_tpoints()
+ranked = r.pirs_sort(
+    outname="ranked_scores.txt",
+    slope_pvals=True,
+    n_permutations=1000,
+    n_jobs=4,
+)
 ```
 
 ## CLI reference
@@ -200,11 +217,107 @@ scores = r.calculate_scores()       # returns DataFrame sorted ascending by scor
 ranked = r.pirs_sort(outname=None)  # returns DataFrame; writes file if outname given
 ```
 
-Scores each expression profile by how well its variance is explained by a
-prediction interval model — lower score = more constitutive.
+Scores each expression profile using 95% prediction interval bounds from a
+linear regression fit.  For each gene the score is:
+
+```
+max over fine time grid of max(|PI_upper(t) − mean_expr|, |PI_lower(t) − mean_expr|)
+────────────────────────────────────────────────────────────────────────────────────
+                              |mean_expr|
+```
+
+A flat, low-noise gene has tight bounds near mean expression everywhere →
+score near 0.  A trending or noisy gene has bounds that deviate far from mean
+expression → large score.  Lower score = more constitutive.
+
 When `anova=True` (default), rhythmic profiles are removed by one-way ANOVA
-before ranking so that constitutive candidates are not contaminated by
+before scoring so that constitutive candidates are not contaminated by
 circadian genes.
+
+#### Permutation p-values
+
+Two independent permutation tests are available after `calculate_scores()`:
+
+```python
+r.calculate_pvals(n_permutations=1000, n_jobs=1)
+# Adds columns: pval, pval_bh
+# Left-tail test: small p = gene has statistically significant temporal
+# structure (good linear fit is more structured than chance).
+
+r.calculate_slope_pvals(n_permutations=1000, n_jobs=1)
+# Adds columns: slope_pval, slope_pval_bh
+# Right-tail test: small p = gene has a statistically significant linear
+# slope (slope collapses toward zero after permutation).
+```
+
+Both can be requested through `pirs_sort`:
+
+```python
+ranked = r.pirs_sort(
+    outname="scores.txt",
+    pvals=True,
+    slope_pvals=True,
+    n_permutations=1000,
+    n_jobs=4,
+)
+```
+
+The two tests are complementary.  `pval` detects clean temporal trend (good
+linear fit with low residuals); `slope_pval` detects any significant linear
+slope regardless of noise level.  Together they distinguish:
+
+| pval | slope_pval | Interpretation |
+|---|---|---|
+| large | large | constitutive or rhythmic — no linear trend |
+| small | small | clean linear trend |
+| large | small | noisy linear trend |
+
+### `circ.expression_classification.classify.Classifier`
+
+Combines PIRS scores and BooteJTK rhythmicity results to classify every gene
+into one of five expression patterns:
+
+| Label | Description |
+|---|---|
+| `constitutive` | Stable expression, no significant slope, not rhythmic |
+| `rhythmic` | Stable-to-moderate expression with a strong circadian rhythm |
+| `linear` | Significant linear slope, not rhythmic |
+| `variable` | High PIRS score (non-constitutive), no slope, not rhythmic |
+| `noisy_rhythmic` | High PIRS score with a detectable rhythmic signal |
+
+`linear` is only emitted when slope p-values have been computed (see below).
+Without slope p-values the original four-label scheme is used.
+
+```python
+from circ.expression_classification.classify import Classifier
+
+clf = Classifier(filename, anova=False, reps=2, size=50, workers=1)
+
+# Step-by-step
+clf.run_pirs(pvals=True, slope_pvals=True, n_permutations=1000, n_jobs=4)
+clf.run_bootjtk()
+result = clf.classify(
+    pirs_percentile=50,       # genes at/below this PIRS percentile are "stable"
+    slope_pval_threshold=0.05,
+    tau_threshold=0.5,
+    emp_p_threshold=0.05,
+)
+
+# Or in a single call
+result = clf.run_all(
+    slope_pvals=True,
+    n_permutations=1000,
+    n_jobs=4,
+)
+```
+
+`result` is a DataFrame indexed by gene ID with columns `pirs_score`,
+`slope_pval` / `slope_pval_bh` (when computed), `tau_mean`, `emp_p`,
+`period_mean`, `phase_mean`, and `label`.
+
+When `slope_pvals=False` (default), `run_pirs` computes only the raw PIRS
+score and `classify` falls back to the four-label scheme.  This keeps the
+default path fast for exploratory use.
 
 ### `circ.pirs.rank.rsd_ranker`
 

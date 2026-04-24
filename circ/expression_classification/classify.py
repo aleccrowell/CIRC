@@ -11,7 +11,7 @@ _REF_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'bootjtk', 'ref_files')
 )
 
-# (pirs_stable, rhythmic) -> label
+# (pirs_stable, rhythmic) -> label  — used when slope p-values are not available
 _LABEL_MAP = {
     (True,  True):  'rhythmic',
     (True,  False): 'constitutive',
@@ -19,16 +19,32 @@ _LABEL_MAP = {
     (False, False): 'variable',
 }
 
+# (pirs_stable, sloped, rhythmic) -> label  — used when slope p-values are available
+_LABEL_MAP_SLOPE = {
+    (True,  False, True):  'rhythmic',
+    (True,  False, False): 'constitutive',
+    (True,  True,  True):  'rhythmic',
+    (True,  True,  False): 'linear',
+    (False, False, True):  'noisy_rhythmic',
+    (False, False, False): 'variable',
+    (False, True,  True):  'noisy_rhythmic',
+    (False, True,  False): 'linear',
+}
+
 
 class Classifier:
     """Classify expression profiles by combining PIRS and BooteJTK.
 
-    Genes are assigned one of four labels based on two independent axes:
+    Genes are assigned one of five labels based on two independent axes:
 
-    - **constitutive**: stable expression (low PIRS score), not rhythmic
+    - **constitutive**: stable expression, not rhythmic, not sloped
     - **rhythmic**: stable-to-moderate expression, strong circadian rhythm
-    - **variable**: high PIRS score (non-constitutive), not rhythmic
+    - **linear**: significant linear slope, not rhythmic
+    - **variable**: high PIRS score (non-constitutive), not rhythmic, not sloped
     - **noisy_rhythmic**: high PIRS score with detectable rhythm signal
+
+    ``linear`` is only emitted when slope p-values have been computed via
+    :meth:`run_pirs` with ``slope_pvals=True``.
 
     Parameters
     ----------
@@ -61,18 +77,33 @@ class Classifier:
     # Individual analysis steps
     # ------------------------------------------------------------------
 
-    def run_pirs(self, alpha: float = 0.5) -> pd.DataFrame:
+    def run_pirs(
+        self,
+        pvals: bool = False,
+        slope_pvals: bool = False,
+        n_permutations: int = 1000,
+        n_jobs: int = 1,
+    ) -> pd.DataFrame:
         """Compute PIRS constitutiveness scores for every gene.
 
         Parameters
         ----------
-        alpha : float
-            Significance level for prediction interval calculation (default 0.5).
+        pvals : bool
+            Whether to compute PIRS permutation p-values (left-tail temporal
+            structure test).  Adds ``pval`` and ``pval_bh`` columns.
+        slope_pvals : bool
+            Whether to compute slope permutation p-values (right-tail slope
+            test).  Adds ``slope_pval`` and ``slope_pval_bh`` columns.
+        n_permutations : int
+            Shuffles per gene passed to the permutation methods (default 1000).
+        n_jobs : int
+            Parallel workers passed to the permutation methods (default 1).
 
         Returns
         -------
         pd.DataFrame
-            Single-column DataFrame with index = gene IDs and column ``score``.
+            DataFrame with index = gene IDs, column ``score``, and optionally
+            ``pval``, ``pval_bh``, ``slope_pval``, ``slope_pval_bh``.
         """
         from circ.pirs.rank import ranker
 
@@ -80,7 +111,12 @@ class Classifier:
         r.get_tpoints()
         if self.anova:
             r.remove_anova()
-        self.pirs_scores = r.calculate_scores(alpha=alpha)
+        r.calculate_scores()
+        if pvals:
+            r.calculate_pvals(n_permutations=n_permutations, n_jobs=n_jobs)
+        if slope_pvals:
+            r.calculate_slope_pvals(n_permutations=n_permutations, n_jobs=n_jobs)
+        self.pirs_scores = r.errors
         return self.pirs_scores
 
     def run_bootjtk(self, basic: bool = True) -> pd.DataFrame:
@@ -143,6 +179,7 @@ class Classifier:
     def classify(
         self,
         pirs_percentile: float = 50,
+        slope_pval_threshold: float = 0.05,
         tau_threshold: float = 0.5,
         emp_p_threshold: float = 0.05,
     ) -> pd.DataFrame:
@@ -151,11 +188,19 @@ class Classifier:
         Call :meth:`run_pirs` and :meth:`run_bootjtk` first, or use
         :meth:`run_all` to do everything in one step.
 
+        When slope p-values are present in ``pirs_scores`` (i.e. :meth:`run_pirs`
+        was called with ``slope_pvals=True``), a five-label scheme is used that
+        adds ``linear`` for genes with a significant slope that are not rhythmic.
+        Otherwise the original four-label scheme is used.
+
         Parameters
         ----------
         pirs_percentile : float
             Genes whose PIRS score falls at or below this percentile of all
             scored genes are considered *stable* (default 50).
+        slope_pval_threshold : float
+            Maximum ``slope_pval`` for a gene to be called *sloped* (default
+            0.05).  Only applied when ``slope_pval`` is present.
         tau_threshold : float
             Minimum ``TauMean`` required to call a gene rhythmic (default 0.5).
         emp_p_threshold : float
@@ -168,11 +213,13 @@ class Classifier:
             DataFrame indexed by gene ID with columns:
 
             * ``pirs_score`` – raw PIRS score
+            * ``pval``, ``pval_bh`` – PIRS permutation p-values, if computed
+            * ``slope_pval``, ``slope_pval_bh`` – slope p-values, if computed
             * ``tau_mean`` – BooteJTK ``TauMean``
             * ``emp_p`` – FDR-corrected p-value (``GammaBH``), if available
             * ``period_mean`` – estimated period, if available
             * ``phase_mean`` – estimated phase, if available
-            * ``label`` – one of ``constitutive``, ``rhythmic``,
+            * ``label`` – one of ``constitutive``, ``rhythmic``, ``linear``,
               ``variable``, ``noisy_rhythmic``
         """
         if self.pirs_scores is None:
@@ -187,6 +234,11 @@ class Classifier:
         result.index.name = self.pirs_scores.index.name
 
         result['pirs_score'] = self.pirs_scores['score']
+
+        for col in ('pval', 'pval_bh', 'slope_pval', 'slope_pval_bh'):
+            if col in self.pirs_scores.columns:
+                result[col] = self.pirs_scores[col]
+
         result['tau_mean'] = self.rhythm_results[tau_col]
 
         for src_col, dst_col in [
@@ -204,10 +256,17 @@ class Classifier:
         if 'emp_p' in result.columns:
             rhythmic = rhythmic & (result['emp_p'] <= emp_p_threshold)
 
-        result['label'] = [
-            _LABEL_MAP.get((bool(s), bool(r)), 'unclassified')
-            for s, r in zip(stable, rhythmic)
-        ]
+        if 'slope_pval' in result.columns:
+            sloped = result['slope_pval'] <= slope_pval_threshold
+            result['label'] = [
+                _LABEL_MAP_SLOPE.get((bool(s), bool(sl), bool(r)), 'unclassified')
+                for s, sl, r in zip(stable, sloped, rhythmic)
+            ]
+        else:
+            result['label'] = [
+                _LABEL_MAP.get((bool(s), bool(r)), 'unclassified')
+                for s, r in zip(stable, rhythmic)
+            ]
 
         self.classifications = result
         return self.classifications
@@ -219,9 +278,13 @@ class Classifier:
     def run_all(
         self,
         *,
-        pirs_alpha: float = 0.5,
+        pvals: bool = False,
+        slope_pvals: bool = False,
+        n_permutations: int = 1000,
+        n_jobs: int = 1,
         basic: bool = True,
         pirs_percentile: float = 50,
+        slope_pval_threshold: float = 0.05,
         tau_threshold: float = 0.5,
         emp_p_threshold: float = 0.05,
     ) -> pd.DataFrame:
@@ -234,10 +297,16 @@ class Classifier:
         pd.DataFrame
             Classification table as returned by :meth:`classify`.
         """
-        self.run_pirs(alpha=pirs_alpha)
+        self.run_pirs(
+            pvals=pvals,
+            slope_pvals=slope_pvals,
+            n_permutations=n_permutations,
+            n_jobs=n_jobs,
+        )
         self.run_bootjtk(basic=basic)
         return self.classify(
             pirs_percentile=pirs_percentile,
+            slope_pval_threshold=slope_pval_threshold,
             tau_threshold=tau_threshold,
             emp_p_threshold=emp_p_threshold,
         )

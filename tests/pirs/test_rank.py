@@ -168,6 +168,161 @@ class TestPirsSort:
         assert "score" in written.columns
 
 
+class TestCalculatePvals:
+    def _make_pval_ranker(self, tmp_path):
+        """Two genes: noisy (should have low p-value) and flat-quiet (high p-value)."""
+        rng = np.random.default_rng(42)
+        tpoints = [2, 4, 6, 8, 10, 12]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        # Flat, low-noise gene — should be constitutive → high p-value
+        flat = rng.normal(5.0, 0.05, len(cols))
+        # Strongly trending gene — should NOT be constitutive → low p-value
+        trending = np.array(
+            [float(t * 3) + rng.normal(0, 0.1) for t in tpoints for _ in range(n_reps)]
+        )
+        df = pd.DataFrame({"flat": flat, "trending": trending}, index=cols).T
+        df.index.name = "#"
+        path = tmp_path / "pval_data.txt"
+        df.to_csv(path, sep="\t")
+        r = ranker(str(path), anova=False)
+        r.get_tpoints()
+        r.calculate_scores()
+        return r
+
+    def test_raises_before_calculate_scores(self, tsv_file):
+        r = ranker(tsv_file, anova=False)
+        r.get_tpoints()
+        with pytest.raises(RuntimeError):
+            r.calculate_pvals()
+
+    def test_pval_columns_present(self, tmp_path):
+        r = self._make_pval_ranker(tmp_path)
+        result = r.calculate_pvals(n_permutations=99)
+        assert "pval" in result.columns
+        assert "pval_bh" in result.columns
+
+    def test_pvals_in_unit_interval(self, tmp_path):
+        r = self._make_pval_ranker(tmp_path)
+        result = r.calculate_pvals(n_permutations=99)
+        assert (result["pval"] >= 0).all() and (result["pval"] <= 1).all()
+        assert (result["pval_bh"] >= 0).all() and (result["pval_bh"] <= 1).all()
+
+    def test_trending_lower_pval_than_flat(self, tmp_path):
+        r = self._make_pval_ranker(tmp_path)
+        result = r.calculate_pvals(n_permutations=199)
+        assert result.loc["trending", "pval"] < result.loc["flat", "pval"]
+
+    def test_parallel_matches_single(self, tmp_path):
+        r1 = self._make_pval_ranker(tmp_path)
+        r1.calculate_pvals(n_permutations=99, n_jobs=1)
+
+        r2 = self._make_pval_ranker(tmp_path)
+        r2.calculate_pvals(n_permutations=99, n_jobs=2)
+
+        # Results may differ due to different seeds per worker but both should be valid
+        assert set(r1.errors.columns) == set(r2.errors.columns)
+        assert (r2.errors["pval"] >= 0).all() and (r2.errors["pval"] <= 1).all()
+
+    def test_pirs_sort_with_pvals_writes_columns(self, tmp_path):
+        rng = np.random.default_rng(7)
+        tpoints = [2, 4, 6, 8]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        data = {f"g{i}": rng.normal(5.0, 0.1, len(cols)) for i in range(4)}
+        df = pd.DataFrame(data, index=cols).T
+        df.index.name = "#"
+        path = tmp_path / "pvals_sort.txt"
+        df.to_csv(path, sep="\t")
+        out = str(tmp_path / "scores_out.txt")
+        r = ranker(str(path), anova=False)
+        r.pirs_sort(outname=out, pvals=True, n_permutations=49)
+        written = pd.read_csv(out, sep="\t", index_col=0)
+        assert "pval" in written.columns
+        assert "pval_bh" in written.columns
+
+
+class TestCalculateSlopePvals:
+    def _make_slope_ranker(self, tmp_path):
+        """Two genes: strongly sloped and flat."""
+        rng = np.random.default_rng(0)
+        tpoints = [2, 4, 6, 8, 10, 12]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        flat    = rng.normal(5.0, 0.05, len(cols))
+        sloped  = np.array(
+            [float(t * 3) + rng.normal(0, 0.1) for t in tpoints for _ in range(n_reps)]
+        )
+        df = pd.DataFrame({"flat": flat, "sloped": sloped}, index=cols).T
+        df.index.name = "#"
+        path = tmp_path / "slope_data.txt"
+        df.to_csv(path, sep="\t")
+        r = ranker(str(path), anova=False)
+        r.get_tpoints()
+        r.calculate_scores()
+        return r
+
+    def test_raises_before_calculate_scores(self, tsv_file):
+        r = ranker(tsv_file, anova=False)
+        r.get_tpoints()
+        with pytest.raises(RuntimeError):
+            r.calculate_slope_pvals()
+
+    def test_slope_pval_columns_present(self, tmp_path):
+        r = self._make_slope_ranker(tmp_path)
+        result = r.calculate_slope_pvals(n_permutations=99)
+        assert "slope_pval" in result.columns
+        assert "slope_pval_bh" in result.columns
+
+    def test_slope_pvals_in_unit_interval(self, tmp_path):
+        r = self._make_slope_ranker(tmp_path)
+        result = r.calculate_slope_pvals(n_permutations=99)
+        assert (result["slope_pval"] >= 0).all() and (result["slope_pval"] <= 1).all()
+        assert (result["slope_pval_bh"] >= 0).all() and (result["slope_pval_bh"] <= 1).all()
+
+    def test_sloped_lower_pval_than_flat(self, tmp_path):
+        r = self._make_slope_ranker(tmp_path)
+        result = r.calculate_slope_pvals(n_permutations=199)
+        assert result.loc["sloped", "slope_pval"] < result.loc["flat", "slope_pval"]
+
+    def test_noisy_flat_not_detected(self, tmp_path):
+        """A noisy but flat gene should not get a small slope p-value."""
+        rng = np.random.default_rng(1)
+        tpoints = [2, 4, 6, 8, 10, 12]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        noisy_flat = rng.normal(5.0, 2.0, len(cols))
+        sloped     = np.array(
+            [float(t * 3) + rng.normal(0, 0.1) for t in tpoints for _ in range(n_reps)]
+        )
+        df = pd.DataFrame({"noisy_flat": noisy_flat, "sloped": sloped}, index=cols).T
+        df.index.name = "#"
+        path = tmp_path / "noisy.txt"
+        df.to_csv(path, sep="\t")
+        r = ranker(str(path), anova=False)
+        r.get_tpoints()
+        r.calculate_scores()
+        result = r.calculate_slope_pvals(n_permutations=199)
+        assert result.loc["sloped", "slope_pval"] < result.loc["noisy_flat", "slope_pval"]
+
+    def test_pirs_sort_with_slope_pvals_writes_columns(self, tmp_path):
+        rng = np.random.default_rng(3)
+        tpoints = [2, 4, 6, 8]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        data = {f"g{i}": rng.normal(5.0, 0.1, len(cols)) for i in range(4)}
+        df = pd.DataFrame(data, index=cols).T
+        df.index.name = "#"
+        path = tmp_path / "slope_sort.txt"
+        df.to_csv(path, sep="\t")
+        out = str(tmp_path / "out.txt")
+        r = ranker(str(path), anova=False)
+        r.pirs_sort(outname=out, slope_pvals=True, n_permutations=49)
+        written = pd.read_csv(out, sep="\t", index_col=0)
+        assert "slope_pval" in written.columns
+        assert "slope_pval_bh" in written.columns
+
+
 class TestRsdRanker:
     def test_init_loads_data(self, tsv_file):
         r = rsd_ranker(tsv_file)
