@@ -6,8 +6,6 @@ from collections import Counter
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc
 
 from circ.simulations import simulate  # noqa: F401  re-exported for backward compat
 
@@ -109,29 +107,18 @@ class analyze:
         self.merged[self.i].fillna(1.0, inplace=True)
         self.i += 1
 
-    def generate_roc_curve(self):
-        for j in self.tags.keys():
-            fpr, tpr, _ = roc_curve(
-                self.merged[self.tags[j]]['Circadian'].values,
-                1 - self.merged[self.tags[j]]['GammaBH'].values,
-                pos_label=1,
-            )
-            plt.plot(fpr, tpr, label=j)
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('Receiver Operating Characteristic Comparison')
-        plt.legend(loc="lower right")
-        plt.savefig('ROC.pdf')
+    def _merged_dict(self):
+        """Build the ``{tag: df}`` dict expected by the visualization module."""
+        return {tag: self.merged[idx] for tag, idx in self.tags.items()}
+
+    def generate_roc_curve(self, outpath='ROC.pdf'):
+        """Plot ROC curves for all added datasets and save to *outpath*."""
+        from circ.visualization.benchmarks import roc_curve_plot
+        ax = roc_curve_plot(self._merged_dict(), outpath=outpath)
+        return ax
 
     def calculate_auc(self):
-        out = {}
-        for j in self.tags.keys():
-            fpr, tpr, _ = roc_curve(
-                self.merged[self.tags[j]]['Circadian'].values,
-                1 - self.merged[self.tags[j]]['GammaBH'].values,
-                pos_label=1,
-            )
-            out[j] = auc(fpr, tpr)
-        self.roc_auc = out
+        """Compute AUC for each dataset and store in ``self.roc_auc``."""
+        from circ.visualization.benchmarks import roc_auc
+        self.roc_auc = roc_auc(self._merged_dict())
+        return self.roc_auc
