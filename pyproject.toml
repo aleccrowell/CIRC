@@ -1,0 +1,43 @@
+[project]
+name = "circ"
+version = "0.1.0"
+description = "Circadian Integrated Research Core"
+authors = [
+    {name = "Alexander Crowell", email = "ac2759@georgetown.edu"}
+]
+license = "BSD-3-Clause"
+readme = "README.md"
+keywords = ["circadian", "bioinformatics", "SVA", "JTK", "proteomics", "RNAseq"]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4",
+    "pandas>=3.0",
+    "scipy>=1.17",
+    "scikit-learn>=1.8",
+    "statsmodels>=0.14",
+    "tqdm>=4.67",
+    "multiprocess>=0.70",
+    "matplotlib>=3.10",
+    "pyarrow>=23.0.1",
+    "seaborn>=0.11",
+]
+
+[project.optional-dependencies]
+fast = ["numba>=0.50.0"]
+
+[project.scripts]
+circ = "circ.cli:main"
+
+[tool.poetry]
+packages = [{include = "circ"}]
+include = ["circ/bootjtk/ref_files/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = ["pytest>=9.0.3"]

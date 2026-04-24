@@ -1,0 +1,119 @@
+CIRC — Circadian Integrated Research Core
+Copyright (c) 2026 Alec Crowell
+Licensed under the BSD 3-Clause License (see LICENSE).
+
+This package incorporates code from the following third-party projects.
+Their licenses are reproduced in full below.
+
+================================================================================
+LIMBR — Learning and Imputation for Mass-spec Bias Reduction
+================================================================================
+Source:  https://github.com/aleccrowell/LIMBR
+Files:   circ/limbr/imputation.py
+         circ/limbr/batch_fx.py
+         circ/limbr/old_fashioned.py
+         circ/limbr/simulations.py  (modified: updated import paths)
+
+Copyright (c) 2017 Alexander M. Crowell
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+================================================================================
+PIRS — Prediction Interval Ranking Score
+================================================================================
+Source:  https://github.com/aleccrowell/PIRS
+Files:   circ/pirs/rank.py
+         circ/pirs/simulations.py
+
+Copyright (c) 2017 Alexander M. Crowell
+
+(BSD 3-Clause License — same terms as LIMBR above)
+
+================================================================================
+BooteJTK-c — Bootstrap empirical JTK circadian rhythm detection
+================================================================================
+Source:  https://github.com/aleccrowell/BooteJTK-c
+         (fork of https://github.com/alanlhutchison/BooteJTK by Alan L. Hutchison)
+Files:   circ/bootjtk/BooteJTK.py
+         circ/bootjtk/CalcP.py  (modified: fixed Python 3 argparse incompatibility)
+         circ/bootjtk/pipeline.py
+         circ/bootjtk/limma_voom.py
+         circ/bootjtk/limma_preprocess.py
+         circ/bootjtk/get_stat_probs.py
+         circ/bootjtk/arbfit.py
+         circ/bootjtk/ref_files/  (all reference data files)
+
+Copyright (c) 2026 Alexander M. Crowell
+Copyright (c) 2016 Alan L. Hutchison
+
+The MIT License (MIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Publications:
+  Hutchison AL et al. (2016). "BooteJTK: Improved Rhythm Detection via
+    Bootstrapping." bioRxiv.
+  Hutchison AL, Maienschein-Cline M, Chiang AH et al. "Improved statistical
+    methods enable greater sensitivity in rhythm detection for genome-wide
+    data." PLoS Computational Biology 2015 11(3): e1004094.
+    doi:10.1371/journal.pcbi.1004094
+
+================================================================================
+mpfit.py — Levenberg-Marquardt least-squares minimization
+================================================================================
+File:    circ/bootjtk/mpfit.py
+
+This implementation traces back through three adaptations:
+
+  1. MINPACK-1 (LMDIF.F) — original FORTRAN implementation
+       More' J, Garbow B, Hillstrom K. "User Guide for MINPACK-1."
+       Argonne National Laboratory Report ANL-80-74, 1980.
+
+  2. IDL adaptation by Craig B. Markwardt
+       Craig B. Markwardt, NASA/GSFC Code 662, Greenbelt, MD 20770
+       craigm@lheamail.gsfc.nasa.gov
+
+  3. Python adaptation by Mark Rivers
+       Mark Rivers, University of Chicago / Argonne National Laboratory
+       Building 434A, Argonne National Laboratory, 9700 South Cass Avenue,
+       Argonne, IL 60439
+       rivers@cars.uchicago.edu

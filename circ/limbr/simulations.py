@@ -1,0 +1,308 @@
+import argparse
+import os
+import re
+import tempfile
+from collections import Counter
+
+import numpy as np
+import pandas as pd
+import string
+from sklearn.preprocessing import scale
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+import random
+
+class simulate:
+    """
+    Generates a properly formulated simulated circadian dataset for testing.
+
+
+    This class takes user specifications on dataset size along with the number and frequency of batch effects and levels of background noise and outputs a simulated dataset along with a key showing which rows represent truly circadian data.
+
+
+    Parameters
+    ----------
+    tpoints : int
+
+    nrows : int
+
+    nreps : int
+
+    tpoint_space : int
+
+    pcirc : float
+
+    phase_prop : float
+
+    phase_noise : float
+
+    amp_noise : float
+
+    n_batch_effects : int
+
+    pbatch : float
+
+    Probability of each batch effects appearance in a given peptide.
+
+    effect_size : float
+
+    Average size of batch effect
+
+    p_miss : float
+
+    probability of missing data
+
+    lam_miss : float
+
+    poisson lambda for # of missing columns in row with missing data
+
+
+
+
+
+
+    Attributes
+    ----------
+
+    simdf : dataframe
+
+    Simulated data without noise.
+
+    simndf : dataframe
+
+    Simulated data with noise.
+
+    """
+
+    def __init__(self,tpoints=24,nrows=1000, nreps=3, tpoint_space=2, pcirc=.5, phase_prop=.5, phase_noise=.25, amp_noise=.75, n_batch_effects=3, pbatch=.5, effect_size=2, p_miss=.2,lam_miss=5,rseed=4574):
+        """
+        Simulates circadian data with optional batch effects and missing values.
+
+        """
+
+        np.random.seed(rseed)
+        self.tpoints = int(tpoints)
+        self.nreps = int(nreps)
+        self.nrows = int(nrows)
+        self.tpoint_space = int(tpoint_space)
+        self.pcirc = float(pcirc)
+        self.phase_prop = float(phase_prop)
+        self.phase_noise = float(phase_noise)
+        self.amp_noise = float(amp_noise)
+        self.n_batch_effects = int(n_batch_effects)
+        self.pbatch = float(pbatch)
+        self.effect_size = float(effect_size)
+        self.p_miss = float(p_miss)
+
+        #procedurally generate column names
+        self.cols = []
+        for i in range(self.tpoints):
+            for j in range(self.nreps):
+                self.cols.append("ZT"+("{0:0=2d}".format(self.tpoint_space*i+self.tpoint_space))+'_'+str(j+1))
+
+        #randomly determine which rows are circadian
+        self.circ = np.random.binomial(1, self.pcirc, self.nrows)
+        #generate a base waveform
+        base = np.arange(0,(4*np.pi),(4*np.pi/self.tpoints))
+        #simulate data
+        self.sim = []
+        phases = []
+        for i in self.circ:
+            if i == 1:
+                temp=[]
+                p = np.random.binomial(1, self.phase_prop)
+                phases.append(p)
+                for j in range(self.nreps):
+                    temp.append(np.sin(base+np.random.normal(0,self.phase_noise,1)+np.pi*p)+np.random.normal(0,self.amp_noise,self.tpoints))
+                self.sim.append([item for sublist in zip(*temp) for item in sublist])
+            else:
+                phases.append('nan')
+                self.sim.append(np.random.normal(0,self.amp_noise,(self.tpoints*self.nreps)))
+        #add in batch effects
+        batch_effects = []
+        for i in range(self.n_batch_effects):
+            batch_effects.append(np.random.normal(0.,self.effect_size,(self.tpoints*self.nreps)))
+        self.simnoise = []
+        for i in self.sim:
+            temp = i
+            bts = np.random.binomial(1, self.pbatch, self.n_batch_effects)
+            for j in range(self.n_batch_effects):
+                temp += bts[j]*batch_effects[j]
+            self.simnoise.append(temp)
+        #p_miss is prob a row is missing any data, generate list of length rows using binomial, then for entries in this list
+        #generate lists of length columns with number of missing values drawn from poisson and append these lists to the mask
+        #sample from poisson to get num_miss make list of num_miss 1s plus num_cols - num_miss 0s then shuffle with np.shuffle
+        miss_rows = np.random.binomial(1, self.p_miss, self.nrows)
+        m = []
+        for i in miss_rows:
+            if i == 1:
+                num_miss = np.random.poisson(lam_miss) + 1
+                mini_mask = np.asarray(num_miss*[1] + (self.tpoints*self.nreps-num_miss)*[0])
+                np.random.shuffle(mini_mask)
+            else:
+                mini_mask = self.tpoints*self.nreps*[0]
+            m.append(mini_mask)
+
+        self.sim_miss = np.ma.masked_array(np.asarray(self.simnoise, dtype=object), mask=m).filled(np.nan)
+
+
+    def generate_pool_map(self, out_name='pool_map'):
+        """
+        Writes a pool map parquet file mapping each sample column to pool 1.
+
+        Parameters
+        ----------
+        out_name : str
+            Output file stem.  The file is written as ``<out_name>.parquet``
+            with a ``pool_number`` column indexed by sample column name.
+
+        """
+        self.out_name = str(out_name)
+        pool_map = {col: 1 for col in self.cols}
+        pd.DataFrame({'pool_number': pool_map}).to_parquet(out_name + '.parquet')
+
+
+    def write_output(self, out_name='simulated_data'):
+        """
+
+        out_name : str
+
+        output file stem
+
+        """
+
+        self.out_name = str(out_name)
+
+        self.simndf = pd.DataFrame(self.sim_miss,columns=self.cols).fillna('NULL')
+        peps = [''.join([random.choice(string.ascii_uppercase) for j in range(12)]) for i in range(len(self.simndf))]
+        prots = [''.join([random.choice(string.ascii_uppercase) for j in range(12)]) for i in range(len(self.simndf))]
+        self.simndf.insert(0, 'Protein', prots)
+        self.simndf.insert(0, 'Peptide', peps)
+        self.simndf.set_index('Peptide',inplace=True)
+        self.simndf.insert((len(self.cols)+1), 'pool_01', ['1']*len(self.simndf))
+        self.simndf.to_csv(out_name+'_with_noise.txt',sep='\t')
+
+        self.simdf = pd.DataFrame(np.asarray(self.sim),columns=self.cols)
+        self.simdf.insert(0, 'Protein', prots)
+        self.simdf.insert(0, 'Peptide', peps)
+        self.simdf.set_index('Protein',inplace=True)
+        self.simdf.index.names = ['#']
+        self.simdf.to_csv(out_name+'_baseline.txt',sep='\t')
+
+        pd.DataFrame(self.circ,columns=['Circadian'],index=self.simndf['Protein']).to_csv(out_name+'_true_classes.txt',sep='\t')
+
+
+
+class analyze:
+    def __init__(self,filename_classes):
+        self.true_classes = pd.read_csv(filename_classes,sep='\t')
+        self.tags = {}
+        self.merged = []
+        self.i = 0
+
+    def run_bootjtk(self, filename, tag, size=50, workers=1):
+        """
+        Run bootjtk significance testing on a LIMBR-processed (or baseline) file.
+
+        Replaces the external eJTK workflow from the README. Reads the tab-delimited
+        output, converts headers to the bootjtk format, runs BooteJTK and CalcP, then
+        calls add_data with the results.
+
+        Parameters
+        ----------
+        filename : str
+            Path to a LIMBR-processed, old_fashioned, or baseline output file.
+        tag : str
+            Label used to identify this dataset in ROC curves.
+        size : int
+            Number of bootstrap resamples per gene (default 50).
+        workers : int
+            Parallel worker processes for BooteJTK (default 1).
+        """
+        from circ.bootjtk import BooteJTK, CalcP
+        import circ.bootjtk as _bootjtk_pkg
+
+        ref_dir = os.path.join(os.path.dirname(_bootjtk_pkg.__file__), 'ref_files')
+
+        df = pd.read_csv(filename, sep='\t', index_col=0)
+
+        # Drop non-data columns (e.g. 'Peptide' present in baseline files)
+        data_cols = [c for c in df.columns if re.match(r'^(ZT|CT)?\d', str(c))]
+        df = df[data_cols]
+
+        # Strip replicate suffixes: 'ZT02_1' -> 'ZT02', '02_1' -> '02'
+        df.columns = [re.sub(r'_\d+$', '', str(c)) for c in df.columns]
+        df.index.name = 'ID'
+        df = df.replace('NULL', 'NA')
+
+        reps = int(np.median(list(Counter(df.columns).values())))
+
+        def _make_args(fn):
+            return argparse.Namespace(
+                filename=fn,
+                means='DEFAULT', sds='DEFAULT', ns='DEFAULT',
+                output='DEFAULT', pickle='DEFAULT',
+                id_list='DEFAULT', null_list='DEFAULT',
+                write=False, prefix='', reps=reps, size=size,
+                workers=workers, waveform='cosine',
+                width=os.path.join(ref_dir, 'asymmetries_02-22_by2.txt'),
+                phase=os.path.join(ref_dir, 'phases_00-22_by2.txt'),
+                period=os.path.join(ref_dir, 'period24.txt'),
+                harding=False, normal=False,
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = os.path.join(tmpdir, 'data.txt')
+            df.to_csv(data_path, sep='\t')
+
+            null_df = pd.DataFrame(
+                np.random.normal(0, 1, df.shape),
+                index=df.index,
+                columns=df.columns,
+            )
+            null_df.index.name = 'ID'
+            null_path = os.path.join(tmpdir, 'null.txt')
+            null_df.to_csv(null_path, sep='\t')
+
+            data_out, _, _ = BooteJTK.main(_make_args(data_path))
+            null_out, _, _ = BooteJTK.main(_make_args(null_path))
+
+            CalcP.main(argparse.Namespace(
+                filename=data_out,
+                null=null_out,
+                fit=False,
+            ))
+            calcp_out = data_out.replace('.txt', '_GammaP.txt')
+
+            self.add_data(calcp_out, tag)
+
+    def add_data(self,filename_ejtk,tag,include_missing=True):
+        self.tags[tag] = self.i
+        ejtk = pd.read_csv(filename_ejtk,sep='\t')
+        if include_missing == True:
+            self.merged.append(pd.merge(self.true_classes[['Protein','Circadian']], ejtk[['ID','GammaBH']], left_on='Protein', right_on='ID',how='left'))
+        else:
+            self.merged.append(pd.merge(self.true_classes[['Protein','Circadian']], ejtk[['ID','GammaBH']], left_on='Protein', right_on='ID',how='inner'))
+        self.merged[self.i].set_index('Protein',inplace=True)
+        self.merged[self.i].drop('ID',axis=1,inplace=True)
+        self.merged[self.i].fillna(1.0,inplace=True)
+        self.i += 1
+
+    def generate_roc_curve(self):
+        for j in self.tags.keys():
+            fpr, tpr, thresholds = roc_curve(self.merged[self.tags[j]]['Circadian'].values, (1-self.merged[self.tags[j]]['GammaBH'].values), pos_label=1)
+            plt.plot(fpr,tpr,label=j)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic Comparison')
+        plt.legend(loc="lower right")
+        plt.savefig('ROC.pdf')
+
+    def calculate_auc(self):
+        out = {}
+        for j in self.tags.keys():
+            fpr, tpr, thresholds = roc_curve(self.merged[self.tags[j]]['Circadian'].values, (1-self.merged[self.tags[j]]['GammaBH'].values), pos_label=1)
+            out[j] = auc(fpr, tpr)
+        self.roc_auc = out
