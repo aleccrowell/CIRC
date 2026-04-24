@@ -40,6 +40,30 @@ class TestRunPirs:
         clf.run_pirs()
         assert clf.pirs_scores is not None
 
+    def test_pvals_adds_columns(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file)
+        scores = clf.run_pirs(pvals=True, n_permutations=49)
+        assert 'pval' in scores.columns
+        assert 'pval_bh' in scores.columns
+
+    def test_slope_pvals_adds_columns(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file)
+        scores = clf.run_pirs(slope_pvals=True, n_permutations=49)
+        assert 'slope_pval' in scores.columns
+        assert 'slope_pval_bh' in scores.columns
+
+    def test_pvals_in_unit_interval(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file)
+        scores = clf.run_pirs(pvals=True, slope_pvals=True, n_permutations=49)
+        for col in ('pval', 'pval_bh', 'slope_pval', 'slope_pval_bh'):
+            assert (scores[col] >= 0).all() and (scores[col] <= 1).all()
+
+    def test_no_pval_columns_without_flags(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file)
+        scores = clf.run_pirs()
+        assert 'pval' not in scores.columns
+        assert 'slope_pval' not in scores.columns
+
 
 # ---------------------------------------------------------------------------
 # Unit tests: BooteJTK integration
@@ -155,6 +179,40 @@ class TestClassify:
         n_low = result_low['label'].isin(rhythmic_labels).sum()
         n_high = result_high['label'].isin(rhythmic_labels).sum()
         assert n_low >= n_high
+
+    def test_slope_pval_columns_forwarded_to_classify(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_pirs(slope_pvals=True, n_permutations=49)
+        clf.run_bootjtk()
+        result = clf.classify()
+        assert 'slope_pval' in result.columns
+        assert 'slope_pval_bh' in result.columns
+
+    def test_linear_label_emitted_with_slope_pvals(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_pirs(slope_pvals=True, n_permutations=49)
+        clf.run_bootjtk()
+        result = clf.classify(slope_pval_threshold=1.0)  # flag everything as sloped
+        valid = {'constitutive', 'rhythmic', 'linear', 'variable', 'noisy_rhythmic'}
+        assert set(result['label'].unique()).issubset(valid)
+        assert 'linear' in result['label'].values
+
+    def test_linear_label_absent_without_slope_pvals(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_pirs()
+        clf.run_bootjtk()
+        result = clf.classify()
+        assert 'linear' not in result['label'].values
+
+    def test_slope_threshold_affects_linear_count(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_pirs(slope_pvals=True, n_permutations=49)
+        clf.run_bootjtk()
+        result_strict = clf.classify(slope_pval_threshold=0.001)
+        result_lenient = clf.classify(slope_pval_threshold=1.0)
+        n_strict = (result_strict['label'] == 'linear').sum()
+        n_lenient = (result_lenient['label'] == 'linear').sum()
+        assert n_strict <= n_lenient
 
 
 # ---------------------------------------------------------------------------
