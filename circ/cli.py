@@ -34,6 +34,29 @@ def _run_rank(args):
     print(f"Ranked {len(sorted_data)} expression profiles → {args.output}")
 
 
+def _run_classify(args):
+    from circ.expression_classification.classify import Classifier
+    clf = Classifier(
+        args.filename,
+        anova=args.anova,
+        reps=args.reps,
+        size=args.size,
+        workers=args.workers,
+    )
+    result = clf.run_all(
+        pirs_alpha=args.pirs_alpha,
+        basic=not args.limma,
+        pirs_percentile=args.pirs_percentile,
+        tau_threshold=args.tau_threshold,
+        emp_p_threshold=args.emp_p_threshold,
+    )
+    result.to_csv(args.output, sep='\t')
+    counts = result['label'].value_counts().to_dict()
+    print(f"Classified {len(result)} genes → {args.output}")
+    for label, n in sorted(counts.items()):
+        print(f"  {label}: {n}")
+
+
 # ---------------------------------------------------------------------------
 # Parser builders
 # ---------------------------------------------------------------------------
@@ -82,6 +105,44 @@ def _add_normalize_parser(subparsers):
     return p
 
 
+def _add_classify_parser(subparsers):
+    p = subparsers.add_parser(
+        "classify",
+        help="Classify expression profiles using PIRS + BooteJTK",
+        description=(
+            "Runs PIRS constitutiveness scoring and BooteJTK rhythmicity detection "
+            "then labels each gene as: constitutive, rhythmic, variable, or noisy_rhythmic."
+        ),
+    )
+    p.add_argument("-f", "--filename", required=True, metavar="FILE",
+                   help="Tab-separated input file (# index + ZT/CT columns)")
+    p.add_argument("-o", "--output", required=True, metavar="FILE",
+                   help="Output TSV with classification results")
+    p.add_argument("--anova", action="store_true",
+                   help="ANOVA-filter differentially expressed genes before PIRS scoring")
+    p.add_argument("--pirs-alpha", type=float, default=0.5, metavar="FLOAT",
+                   dest="pirs_alpha",
+                   help="Prediction interval alpha for PIRS scoring (default: 0.5)")
+    p.add_argument("--pirs-percentile", type=float, default=50, metavar="FLOAT",
+                   dest="pirs_percentile",
+                   help="PIRS percentile cutoff for 'stable' genes (default: 50)")
+    p.add_argument("--tau-threshold", type=float, default=0.5, metavar="FLOAT",
+                   dest="tau_threshold",
+                   help="Minimum TauMean to classify a gene as rhythmic (default: 0.5)")
+    p.add_argument("--emp-p-threshold", type=float, default=0.05, metavar="FLOAT",
+                   dest="emp_p_threshold",
+                   help="Maximum FDR-corrected p-value for rhythmicity (default: 0.05)")
+    p.add_argument("-r", "--reps", type=int, default=2, metavar="N",
+                   help="Replicates per timepoint for BooteJTK (default: 2)")
+    p.add_argument("-z", "--size", type=int, default=50, metavar="N",
+                   help="Bootstrap iterations per gene for BooteJTK (default: 50)")
+    p.add_argument("-j", "--workers", type=int, default=1, metavar="N",
+                   help="Parallel worker processes for BooteJTK (default: 1)")
+    p.add_argument("--limma", action="store_true",
+                   help="Use Limma/Vash variance shrinkage before BooteJTK")
+    return p
+
+
 def _add_rank_parser(subparsers):
     p = subparsers.add_parser(
         "rank",
@@ -119,6 +180,7 @@ def main():
     _add_impute_parser(subparsers)
     _add_normalize_parser(subparsers)
     _add_rank_parser(subparsers)
+    _add_classify_parser(subparsers)
 
     # rhythm and rhythm-calcp: capture remaining args and delegate to BooteJTK parsers
     rhythm_p = subparsers.add_parser(
@@ -147,6 +209,8 @@ def main():
         _run_normalize(args)
     elif args.command == "rank":
         _run_rank(args)
+    elif args.command == "classify":
+        _run_classify(args)
     elif args.command == "rhythm":
         sys.argv = [sys.argv[0]] + (args.bootejtk_args or [])
         from circ.bootjtk.BooteJTK import cli
