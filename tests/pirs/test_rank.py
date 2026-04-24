@@ -323,6 +323,39 @@ class TestCalculateSlopePvals:
         assert "slope_pval_bh" in written.columns
 
 
+class TestRankerParquetAndDataFrame:
+    def test_accepts_dataframe(self, tsv_file):
+        df = pd.read_csv(tsv_file, sep="\t", index_col=0)
+        r = ranker(df, anova=False)
+        assert isinstance(r.data, pd.DataFrame)
+        assert len(r.data) == len(df)
+
+    def test_reads_parquet_input(self, tmp_path):
+        df = pd.DataFrame(
+            {"ZT02_1": [1.0, 2.0], "ZT04_1": [1.1, 2.1]},
+            index=["ga", "gb"],
+        )
+        df.index.name = "#"
+        path = str(tmp_path / "expr.parquet")
+        df.to_parquet(path)
+        r = ranker(path, anova=False)
+        assert set(r.data.index) == {"ga", "gb"}
+
+    def test_pirs_sort_writes_parquet(self, tsv_file, tmp_path):
+        out = str(tmp_path / "scores.parquet")
+        r = ranker(tsv_file, anova=False)
+        r.pirs_sort(outname=out)
+        result = pd.read_parquet(out)
+        assert "score" in result.columns
+
+    def test_pirs_sort_parquet_roundtrip(self, tsv_file, tmp_path):
+        out = str(tmp_path / "scores.parquet")
+        r = ranker(tsv_file, anova=False)
+        r.pirs_sort(outname=out)
+        result = pd.read_parquet(out)
+        assert len(result) > 0
+
+
 class TestRsdRanker:
     def test_init_loads_data(self, tsv_file):
         r = rsd_ranker(tsv_file)

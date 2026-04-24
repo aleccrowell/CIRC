@@ -13,6 +13,11 @@ integrating four complementary tools:
 A single `circ` CLI entry point wraps all three core tools, and all modules share
 the same `ZT{HH}_{rep}` column format so outputs chain directly between steps.
 
+All modules accept either a **file path** or a **pandas DataFrame** as input,
+and all file I/O supports both **Apache Parquet** (`.parquet`) and tab-separated
+text (`.txt` / `.tsv`).  The shared `circ.io` utilities handle format detection
+automatically by file extension.
+
 ## Installation
 
 Requires Python 3.11+. Install with [Poetry](https://python-poetry.org/):
@@ -31,9 +36,8 @@ poetry install --extras fast
 
 ## Data format
 
-All three tools expect tab-separated files with samples as columns named
-`ZT{HH}_{rep}` (zero-padded two-digit Zeitgeber Time, underscore, replicate
-number), for example:
+All tools expect expression data with samples as columns named `ZT{HH}_{rep}`
+(zero-padded two-digit Zeitgeber Time, underscore, replicate number):
 
 ```
 #       ZT02_1  ZT02_2  ZT04_1  ZT04_2  ZT06_1  ZT06_2
@@ -44,9 +48,37 @@ gene_b  ...
 For proteomics data the first two columns are `Peptide` and `Protein` instead
 of the single `#` index column.
 
+### File format
+
+Inputs and outputs can be **Apache Parquet** (`.parquet`) or **tab-separated
+text** (any other extension).  The format is detected automatically by file
+extension everywhere — CLI flags, Python API, and intermediate files all
+follow the same rule.  Parquet is preferred for data at rest because it is
+faster to read, smaller on disk, and preserves dtypes without round-trip loss.
+
+```bash
+# TSV output (backward-compatible)
+circ rank -f expr.txt -o ranked_scores.txt
+
+# Parquet output
+circ rank -f expr.parquet -o ranked_scores.parquet
+```
+
+All modules also accept a **pandas DataFrame** directly in the Python API,
+removing the need to write intermediate files when composing steps in a script:
+
+```python
+import pandas as pd
+from circ.pirs.rank import ranker
+
+df = pd.read_parquet("expr.parquet")
+r = ranker(df, anova=False)       # DataFrame passed directly
+ranked = r.pirs_sort()
+```
+
 ## Full pipeline
 
-A typical proteomics circadian experiment:
+A typical proteomics circadian experiment using Parquet throughout:
 
 ```python
 from circ.limbr import simulations, imputation, batch_fx
@@ -57,19 +89,21 @@ sim = simulations.simulate(tpoints=12, nrows=500, nreps=2, rseed=42)
 sim.generate_pool_map(out_name="pool_map")
 sim.write_output(out_name="sim")
 
-# 2. Impute missing values
+# 2. Impute missing values — write Parquet for fast downstream reading
 imp = imputation.imputable("sim_with_noise.txt", missingness=0.3, neighbors=10)
-imp.impute_data("imputed.txt")
+imp.impute_data("imputed.parquet")
 
-# 3. Remove batch effects
-sva_obj = batch_fx.sva("imputed.txt", design="c", data_type="p",
+# 3. Remove batch effects — reads Parquet, writes Parquet
+#    Diagnostic sidecars (imputed_trends.parquet, _perms.parquet, etc.) are
+#    written alongside the main output with a matching extension.
+sva_obj = batch_fx.sva("imputed.parquet", design="c", data_type="p",
                         pool="pool_map.parquet")
 sva_obj.preprocess_default()
 sva_obj.perm_test(nperm=200)
-sva_obj.output_default("normalized.txt")
+sva_obj.output_default("normalized.parquet")
 
-# 4. Classify expression patterns
-clf = Classifier("normalized.txt", reps=2)
+# 4. Classify expression patterns — accepts the Parquet path directly
+clf = Classifier("normalized.parquet", reps=2)
 result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
 # result.label: constitutive | rhythmic | linear | variable | noisy_rhythmic
 
@@ -77,15 +111,37 @@ result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
 constitutive = result[result["label"] == "constitutive"].index
 ```
 
+Modules can also be composed **in-memory** by passing DataFrames directly —
+no intermediate files required:
+
+```python
+import pandas as pd
+from circ.limbr.batch_fx import sva
+from circ.expression_classification.classify import Classifier
+
+# Load once, pass by reference
+df = pd.read_parquet("imputed.parquet")
+
+sva_obj = sva(df, design="c", data_type="p", pool="pool_map.parquet")
+sva_obj.preprocess_default()
+sva_obj.perm_test(nperm=200)
+sva_obj.output_default("normalized.parquet")
+
+normalized = sva_obj.svd_norm   # DataFrame available directly after normalize()
+
+clf = Classifier(normalized, reps=2)
+result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
+```
+
 For finer control over the PIRS step (e.g. writing ranked scores to disk):
 
 ```python
 from circ.pirs.rank import ranker
 
-r = ranker("normalized.txt", anova=True)
+r = ranker("normalized.parquet", anova=True)
 r.get_tpoints()
 ranked = r.pirs_sort(
-    outname="ranked_scores.txt",
+    outname="ranked_scores.parquet",
     slope_pvals=True,
     n_permutations=1000,
     n_jobs=4,
@@ -177,13 +233,37 @@ Key BooteJTK flags:
 
 ## Module API
 
+### `circ.io` — shared I/O utilities
+
+```python
+from circ.io import read_expression, write_expression, sidecar_path
+
+# Read from Parquet or TSV; or pass a DataFrame directly
+df = read_expression("data.parquet")          # Parquet
+df = read_expression("data.txt")              # TSV, RNAseq (# index)
+df = read_expression("data.txt", data_type="p")  # TSV, proteomics (Peptide/Protein)
+df = read_expression(existing_df)             # DataFrame passthrough
+
+# Write to Parquet or TSV (format from extension)
+write_expression(df, "out.parquet")
+write_expression(df, "out.txt")
+
+# Derive a sidecar path that preserves the main output's extension
+sidecar_path("out.parquet", "_trends")   # → "out_trends.parquet"
+sidecar_path("out.txt", "_perms")        # → "out_perms.txt"
+```
+
+These utilities are used internally by all modules, but can also be called
+directly when building custom pipelines.
+
 ### `circ.limbr.imputation.imputable`
 
 ```python
 from circ.limbr.imputation import imputable
 
-obj = imputable(filename, missingness=0.3, neighbors=10)
-obj.impute_data(output_filename)
+# Accepts a file path (TSV or Parquet) or a DataFrame
+obj = imputable("raw.txt", missingness=0.3, neighbors=10)
+obj.impute_data("imputed.parquet")   # extension determines output format
 ```
 
 Deduplicates peptides, drops rows exceeding the missingness threshold, and
@@ -194,10 +274,13 @@ imputes remaining missing values using K-nearest neighbours.
 ```python
 from circ.limbr.batch_fx import sva
 
-obj = sva(filename, design="c", data_type="p", pool="pool_map.parquet")
+# Accepts a file path (TSV or Parquet) or a DataFrame
+obj = sva("imputed.parquet", design="c", data_type="p", pool="pool_map.parquet")
 obj.preprocess_default()
 obj.perm_test(nperm=200, npr=1)
-obj.output_default(output_filename)
+obj.output_default("normalized.parquet")
+# Diagnostic sidecars written alongside: normalized_trends.parquet,
+# normalized_perms.parquet, normalized_tks.parquet, normalized_pep_bias.parquet
 ```
 
 Applies pool normalization (proteomics), quantile normalization, and SVA-based
@@ -211,10 +294,11 @@ identification and removal of latent batch effects.
 ```python
 from circ.pirs.rank import ranker
 
-r = ranker(filename, anova=True)
+# Accepts a file path (TSV or Parquet) or a DataFrame
+r = ranker("normalized.parquet", anova=True)
 r.get_tpoints()
-scores = r.calculate_scores()       # returns DataFrame sorted ascending by score
-ranked = r.pirs_sort(outname=None)  # returns DataFrame; writes file if outname given
+scores = r.calculate_scores()                 # returns DataFrame sorted ascending
+ranked = r.pirs_sort(outname="scores.parquet")  # writes Parquet; returns sorted data
 ```
 
 Scores each expression profile using 95% prediction interval bounds from a
@@ -291,7 +375,8 @@ Without slope p-values the original four-label scheme is used.
 ```python
 from circ.expression_classification.classify import Classifier
 
-clf = Classifier(filename, anova=False, reps=2, size=50, workers=1)
+# Accepts a file path (TSV or Parquet) or a DataFrame
+clf = Classifier("normalized.parquet", anova=False, reps=2, size=50, workers=1)
 
 # Step-by-step
 clf.run_pirs(pvals=True, slope_pvals=True, n_permutations=1000, n_jobs=4)
@@ -324,9 +409,10 @@ default path fast for exploratory use.
 ```python
 from circ.pirs.rank import rsd_ranker
 
-r = rsd_ranker(filename)
+# Accepts a file path (TSV or Parquet) or a DataFrame
+r = rsd_ranker("normalized.parquet")
 scores = r.calculate_scores()
-ranked = r.rsd_sort(outname=None)
+ranked = r.rsd_sort(outname="rsd_scores.parquet")
 ```
 
 Alternative ranker using Relative Standard Deviation — faster but less

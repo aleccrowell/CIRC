@@ -144,8 +144,9 @@ class ranker:
                           calculate_scores() / calculate_pvals()
     """
 
-    def __init__(self, filename, anova=True):
-        self.data = pd.read_csv(filename, sep='\t', header=0, index_col=0)
+    def __init__(self, source, anova=True):
+        from circ.io import read_expression
+        self.data = read_expression(source)
         self.data = self.data[(self.data.T != 0).any()]
         self.anova = anova
         self.errors = None
@@ -387,7 +388,8 @@ class ranker:
             self.calculate_slope_pvals(n_permutations=n_permutations, n_jobs=n_jobs)
         sorted_data = self.data.loc[self.errors.index.values]
         if outname:
-            self.errors.to_csv(outname, sep='\t')
+            from circ.io import write_expression
+            write_expression(self.errors, outname)
         return sorted_data
 
 
@@ -408,8 +410,9 @@ class rsd_ranker:
     data : DataFrame
     """
 
-    def __init__(self, filename):
-        self.data = pd.read_csv(filename, sep='\t', header=0, index_col=0)
+    def __init__(self, source):
+        from circ.io import read_expression
+        self.data = read_expression(source)
         self.data = self.data[(self.data.T != 0).any()]
 
     def calculate_scores(self):
@@ -435,5 +438,6 @@ class rsd_ranker:
         self.calculate_scores()
         sorted_data = self.data.loc[self.rsd.index.values]
         if outname:
-            self.rsd.to_csv(outname, sep='\t')
+            from circ.io import write_expression
+            write_expression(self.rsd, outname)
         return sorted_data

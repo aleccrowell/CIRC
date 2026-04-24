@@ -29,14 +29,25 @@ class imputable:
 
     """
 
-    def __init__(self, filename, missingness, neighbors=10):
+    def __init__(self, source, missingness, neighbors=10):
         """
         Constructor, takes input data and missingness threshold and initializes imputable object.
 
         This is the initialization function for imputation.  It reads the input file of raw data and sets the user specified value for the missingness threshold and number of nearest neighbors.
 
         """
-        self.data = pd.read_csv(filename,sep='\t')
+        if isinstance(source, pd.DataFrame):
+            df = source.copy()
+        else:
+            path = str(source)
+            if path.endswith('.parquet'):
+                df = pd.read_parquet(path)
+            else:
+                df = pd.read_csv(path, sep='\t')
+        # deduplicate() expects flat columns, not a MultiIndex
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.reset_index()
+        self.data = df
         self.miss = float(missingness)
         self.pats = {}
         self.notdone = True
@@ -200,7 +211,8 @@ missing values with corresponding averages.
         meld.sort_index(inplace=True)
         meld.set_index([self.data.index.get_level_values(0),self.data.index.get_level_values(1)], inplace=True)
         meld.columns = self.data.columns
-        meld.to_csv(outname,sep='\t')
+        from circ.io import write_expression
+        write_expression(meld, outname)
 
     def impute_data(self,out_file):
         self.deduplicate()

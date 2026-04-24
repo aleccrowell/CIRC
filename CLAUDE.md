@@ -19,19 +19,29 @@ This project uses **Poetry** for dependency management and packaging.
 circ/                        Main package
   __init__.py
   cli.py                     Unified `circ` CLI entry point
+  io.py                      Shared I/O utilities (read_expression, write_expression, sidecar_path)
   simulations.py             Shared simulation class (3-class: circadian/linear/constitutive)
   pirs/                      Prediction Interval Ranking Score
   bootjtk/                   Bootstrap empirical JTK circadian detection
   limbr/                     KNN imputation + SVA batch-effect removal
   expression_classification/ Unified PIRS + BooteJTK classifier
 tests/                       pytest test suite (mirrors circ/ layout)
+  test_io.py                 Tests for circ.io utilities
 ```
 
 ## Data format
 
-Expression input files are tab-separated with:
+Expression inputs and outputs support two formats, detected by file extension:
+- **`.parquet`** — Apache Parquet (preferred for data at rest; faster, smaller, dtype-safe)
+- **anything else** — tab-separated text (legacy/interop)
+
+Column convention for expression data:
 - First column: gene/peptide ID (header cell is `#` or `ID`)
 - Remaining columns: ZT- or CT-prefixed sample names, e.g. `ZT02_1`, `ZT04_2`
+
+All module constructors (`ranker`, `sva`, `imputable`, `Classifier`) accept either a file path
+or a `pd.DataFrame` directly.  Use `circ.io.read_expression` / `write_expression` for
+format-transparent I/O in custom scripts.
 
 ## Key conventions
 

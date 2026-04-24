@@ -50,7 +50,8 @@ def _run_classify(args):
         tau_threshold=args.tau_threshold,
         emp_p_threshold=args.emp_p_threshold,
     )
-    result.to_csv(args.output, sep='\t')
+    from circ.io import write_expression
+    write_expression(result, args.output)
     counts = result['label'].value_counts().to_dict()
     print(f"Classified {len(result)} genes → {args.output}")
     for label, n in sorted(counts.items()):
