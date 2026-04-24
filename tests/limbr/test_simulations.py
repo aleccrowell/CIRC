@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from circ.limbr.simulations import simulate
+from circ.simulations import simulate
 
 
 def test_default_shapes():
@@ -33,7 +33,7 @@ def test_different_seeds_differ():
 
 
 def test_pcirc_produces_expected_fraction():
-    sim = simulate(nrows=1000, pcirc=0.5, rseed=42)
+    sim = simulate(nrows=1000, pcirc=0.5, plin=0.0, rseed=42)
     frac = sim.circ.mean()
     assert 0.35 < frac < 0.65
 
@@ -48,28 +48,28 @@ def test_generate_pool_map_creates_file(tmp_path):
     assert set(pool_map.keys()) == set(sim.cols)
 
 
-def test_write_output_creates_files(tmp_path):
+def test_write_proteomics_creates_files(tmp_path):
     sim = simulate(tpoints=12, nrows=20, nreps=2, rseed=42)
     out = str(tmp_path / "sim")
-    sim.write_output(out_name=out)
+    sim.write_proteomics(out_name=out)
     assert os.path.exists(out + "_with_noise.txt")
     assert os.path.exists(out + "_baseline.txt")
     assert os.path.exists(out + "_true_classes.txt")
 
 
-def test_write_output_true_classes_shape(tmp_path):
+def test_write_proteomics_true_classes_shape(tmp_path):
     nrows = 30
     sim = simulate(tpoints=12, nrows=nrows, nreps=2, rseed=42)
     out = str(tmp_path / "sim")
-    sim.write_output(out_name=out)
+    sim.write_proteomics(out_name=out)
     df = pd.read_csv(out + "_true_classes.txt", sep="\t", index_col=0)
     assert len(df) == nrows
     assert "Circadian" in df.columns
 
 
-def test_write_output_classes_binary(tmp_path):
+def test_write_proteomics_classes_binary(tmp_path):
     sim = simulate(tpoints=12, nrows=50, nreps=2, rseed=42)
     out = str(tmp_path / "sim")
-    sim.write_output(out_name=out)
+    sim.write_proteomics(out_name=out)
     df = pd.read_csv(out + "_true_classes.txt", sep="\t", index_col=0)
     assert set(df["Circadian"].unique()).issubset({0, 1})
