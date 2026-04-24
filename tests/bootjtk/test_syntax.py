@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 _SKIP_DIRS = {".venv", "__pycache__", ".git", "build", "dist"}
 
 
