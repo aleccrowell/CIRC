@@ -108,8 +108,8 @@ class simulate:
             p=[pcirc, plin, pconst],
         )
 
-        # Base waveform spanning two full periods
-        base = np.arange(0, 4 * np.pi, 4 * np.pi / self.tpoints)
+        # One 24-hour cycle across tpoints timepoints
+        base = np.arange(0, 2 * np.pi, 2 * np.pi / self.tpoints)
         ramp = np.linspace(0, 2, self.tpoints)
 
         # Build clean simulation matrix
@@ -130,7 +130,7 @@ class simulate:
                 ]
                 raw[idx] = [v for t in zip(*reps) for v in t]
             else:  # constitutive
-                raw[idx] = np.random.normal(0, amp_noise, n_cols)
+                raw[idx] = np.random.normal(1, amp_noise, n_cols)
 
         self._raw = raw
         # Row-scale to unit standard deviation for expression analysis

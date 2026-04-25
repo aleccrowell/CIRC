@@ -41,10 +41,10 @@ from circ.visualization.classify import (
     period_distribution,
     classification_summary,
 )
+from circ.evaluation import roc_auc
 from circ.visualization.benchmarks import (
     pr_curve,
     roc_curve_plot,
-    roc_auc,
     classification_pr,
     classification_roc,
 )
