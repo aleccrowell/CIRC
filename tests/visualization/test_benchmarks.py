@@ -1,4 +1,10 @@
-"""Tests for circ.visualization.benchmarks."""
+"""Tests for circ.visualization.benchmarks — plotting functions only.
+
+Metric correctness tests (roc_auc, classification_auc, classification_ap)
+live in tests/test_evaluation.py.
+"""
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,7 +16,6 @@ import matplotlib.axes
 from circ.visualization.benchmarks import (
     pr_curve,
     roc_curve_plot,
-    roc_auc,
     classification_pr,
     classification_roc,
 )
@@ -43,7 +48,7 @@ def curves_df():
 
 @pytest.fixture
 def merged_dict():
-    """Synthetic merged dict for ROC curves."""
+    """Synthetic merged dict for roc_curve_plot tests."""
     rng = np.random.default_rng(1)
     n = 100
     truth = rng.integers(0, 2, n)
@@ -131,22 +136,6 @@ class TestRocCurvePlot:
 
 
 # ---------------------------------------------------------------------------
-# roc_auc
-# ---------------------------------------------------------------------------
-
-class TestRocAuc:
-    def test_returns_dict(self, merged_dict):
-        result = roc_auc(merged_dict)
-        assert isinstance(result, dict)
-        assert set(result.keys()) == set(merged_dict.keys())
-
-    def test_auc_in_unit_interval(self, merged_dict):
-        result = roc_auc(merged_dict)
-        for v in result.values():
-            assert 0.0 <= v <= 1.0
-
-
-# ---------------------------------------------------------------------------
 # classification_pr
 # ---------------------------------------------------------------------------
 
@@ -175,7 +164,7 @@ class TestClassificationPr:
 
 
 # ---------------------------------------------------------------------------
-# classification_roc
+# classification_roc — rendering
 # ---------------------------------------------------------------------------
 
 class TestClassificationRoc:
@@ -194,3 +183,69 @@ class TestClassificationRoc:
         ax = classification_roc(classification_df, true_classes, tasks=tasks)
         # 1 method line + diagonal
         assert len(ax.lines) == 2
+
+
+# ---------------------------------------------------------------------------
+# classification_roc — AUC values embedded in legend labels
+# ---------------------------------------------------------------------------
+
+class TestClassificationRocValues:
+    """AUC values written into classification_roc() legend labels should be correct."""
+
+    def _extract_auc(self, ax):
+        """Return the first AUC value found in any line label on the axes."""
+        for line in ax.lines:
+            m = re.search(r'AUC=([0-9.]+)', line.get_label())
+            if m:
+                return float(m.group(1))
+        return None
+
+    def test_perfect_slope_pval_gives_auc_near_one(self):
+        """A score that perfectly separates Linear genes should appear as AUC ≈ 1.0."""
+        n = 100
+        clf_df = pd.DataFrame(
+            {'slope_pval': np.array([0.001] * 25 + [0.99] * 75)},
+            index=[f'g{i}' for i in range(n)],
+        )
+        truth_df = pd.DataFrame(
+            {'Linear': np.array([1] * 25 + [0] * 75)},
+            index=clf_df.index,
+        )
+        ax = classification_roc(clf_df, truth_df, tasks=[('slope_pval', 'Linear', True)])
+        auc_val = self._extract_auc(ax)
+        assert auc_val is not None, "AUC value not found in classification_roc legend labels"
+        assert auc_val > 0.99, (
+            f"Perfect slope_pval should give AUC > 0.99; got {auc_val:.3f}"
+        )
+
+    def test_random_score_gives_near_chance_auc(self):
+        """A random score should appear as AUC ≈ 0.5 in the legend."""
+        rng = np.random.default_rng(55)
+        n = 300
+        clf_df = pd.DataFrame(
+            {'pirs_score': rng.uniform(0, 1, n)},
+            index=[f'g{i}' for i in range(n)],
+        )
+        truth_df = pd.DataFrame(
+            {'Const': rng.integers(0, 2, n)},
+            index=clf_df.index,
+        )
+        ax = classification_roc(clf_df, truth_df, tasks=[('pirs_score', 'Const', True)])
+        auc_val = self._extract_auc(ax)
+        assert auc_val is not None, "AUC value not found in classification_roc legend labels"
+        assert abs(auc_val - 0.5) < 0.1, (
+            f"Random pirs_score AUC={auc_val:.3f} should be near 0.5"
+        )
+
+    def test_all_tasks_produce_auc_labels(self, classification_df, true_classes):
+        """All auto-detected tasks should embed an AUC value in their legend label."""
+        ax = classification_roc(classification_df, true_classes)
+        auc_labels = [
+            l for line in ax.lines
+            for l in [line.get_label()]
+            if re.search(r'AUC=([0-9.]+)', l)
+        ]
+        # Should have at least one labelled task line (random diagonal also has AUC=0.5)
+        assert len(auc_labels) >= 2, (
+            f"Expected ≥2 lines with AUC labels; found {len(auc_labels)}"
+        )

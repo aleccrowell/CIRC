@@ -1,14 +1,16 @@
-"""Benchmark visualizations: PR curves, ROC curves, and AUC comparison.
+"""Benchmark visualizations: PR curves and ROC curves.
 
 The standalone functions here are used by the ``analyze`` classes in
 ``circ.pirs.simulations`` and ``circ.limbr.simulations``, and can also be
 called directly with pre-computed data.
+
+Metric-only functions (no matplotlib) live in ``circ.evaluation``.
 """
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import precision_recall_curve, roc_curve, auc
+from sklearn.metrics import average_precision_score, precision_recall_curve, roc_curve, auc
 
 
 # ---------------------------------------------------------------------------
@@ -105,28 +107,6 @@ def roc_curve_plot(merged_dict, ax=None, outpath=None):
     return ax
 
 
-def roc_auc(merged_dict):
-    """Compute area under the ROC curve for each method.
-
-    Parameters
-    ----------
-    merged_dict : dict[str, pd.DataFrame]
-        Same format as :func:`roc_curve_plot`.
-
-    Returns
-    -------
-    dict[str, float]
-        ``{tag: auc_value}``.
-    """
-    out = {}
-    for tag, df in merged_dict.items():
-        truth_col = 'truth' if 'truth' in df.columns else 'Circadian'
-        score_col = 'score' if 'score' in df.columns else 'GammaBH'
-        fpr, tpr, _ = roc_curve(df[truth_col].values, 1 - df[score_col].values, pos_label=1)
-        out[tag] = auc(fpr, tpr)
-    return out
-
-
 # ---------------------------------------------------------------------------
 # Classification benchmarking (Classifier output + simulation ground truth)
 # ---------------------------------------------------------------------------
@@ -181,7 +161,7 @@ def classification_pr(
         merged[ground_truth_col].values, scores, pos_label=1
     )
     baseline = merged[ground_truth_col].mean()
-    ap = np.trapezoid(precision, recall) if hasattr(np, 'trapezoid') else np.trapz(precision, recall)
+    ap = average_precision_score(merged[ground_truth_col].values, scores)
     ax.plot(recall, precision, color='#4878CF', lw=1.2,
             label=f'{score_col} (AP={ap:.3f})')
     ax.axhline(baseline, color='#CC4444', ls=':', lw=0.9,

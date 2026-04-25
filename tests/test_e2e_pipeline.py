@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.metrics import roc_auc_score
 
 from circ.simulations import simulate
 from circ.limbr.imputation import imputable
@@ -248,6 +249,44 @@ class TestClassification:
         assert (result.loc[linear_ids, "slope_pval"].mean() <
                 result.loc[const_ids, "slope_pval"].mean())
 
+    def test_circadian_genes_have_higher_tau_mean(self, pipeline):
+        """Simulated circadian genes should rank higher on tau_mean than constitutive genes."""
+        result = pipeline["result"]
+        true_classes = pipeline["true_classes"]
+        shared = result.index.intersection(true_classes.index)
+        if len(shared) < 10:
+            pytest.skip("too few matched genes for directional test")
+        tc = true_classes.loc[shared]
+        circ_ids = tc[tc["Circadian"] == 1].index
+        const_ids = tc[tc["Const"] == 1].index
+        if len(circ_ids) < 3 or len(const_ids) < 3:
+            pytest.skip("insufficient class representation")
+        circ_tau = result.loc[circ_ids, "tau_mean"].mean()
+        const_tau = result.loc[const_ids, "tau_mean"].mean()
+        assert circ_tau > const_tau, (
+            f"circadian tau_mean ({circ_tau:.3f}) should exceed "
+            f"constitutive ({const_tau:.3f})"
+        )
+
+    def test_circadian_genes_have_lower_emp_p(self, pipeline):
+        """Simulated circadian genes should have lower GammaBH p-values than constitutive."""
+        result = pipeline["result"]
+        true_classes = pipeline["true_classes"]
+        shared = result.index.intersection(true_classes.index)
+        if len(shared) < 10:
+            pytest.skip("too few matched genes for directional test")
+        tc = true_classes.loc[shared]
+        circ_ids = tc[tc["Circadian"] == 1].index
+        const_ids = tc[tc["Const"] == 1].index
+        if len(circ_ids) < 3 or len(const_ids) < 3:
+            pytest.skip("insufficient class representation")
+        circ_emp_p = result.loc[circ_ids, "emp_p"].dropna().mean()
+        const_emp_p = result.loc[const_ids, "emp_p"].dropna().mean()
+        assert circ_emp_p < const_emp_p, (
+            f"circadian emp_p ({circ_emp_p:.3f}) should be lower than "
+            f"constitutive ({const_emp_p:.3f})"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Step 5: Visualization — classification plots
@@ -345,3 +384,54 @@ class TestBenchmarkPlots:
         outpath = str(pipeline["tmp"] / "benchmark.png")
         fig.savefig(outpath, dpi=72, bbox_inches="tight")
         assert os.path.exists(outpath)
+
+    def _matched(self, pipeline, score_col, truth_col):
+        """Return a clean DataFrame with score and truth aligned on shared index."""
+        result = pipeline["result"]
+        true_classes = pipeline["true_classes"]
+        shared = result.index.intersection(true_classes.index)
+        return (
+            result.loc[shared, [score_col]]
+            .join(true_classes.loc[shared, [truth_col]])
+            .dropna()
+        )
+
+    def test_tau_mean_circadian_auc_above_chance(self, pipeline):
+        """tau_mean should discriminate simulated circadian genes better than random."""
+        df = self._matched(pipeline, "tau_mean", "Circadian")
+        if len(df) < 10 or df["Circadian"].nunique() < 2:
+            pytest.skip("insufficient data for AUC test")
+        auc = roc_auc_score(df["Circadian"], df["tau_mean"])
+        assert auc > 0.5, (
+            f"tau_mean → Circadian AUC={auc:.3f}; expected > 0.5 (better than random)"
+        )
+
+    def test_emp_p_circadian_auc_above_chance(self, pipeline):
+        """emp_p (inverted) should discriminate simulated circadian genes better than random."""
+        df = self._matched(pipeline, "emp_p", "Circadian")
+        if len(df) < 10 or df["Circadian"].nunique() < 2:
+            pytest.skip("insufficient data for AUC test")
+        auc = roc_auc_score(df["Circadian"], -df["emp_p"])
+        assert auc > 0.5, (
+            f"emp_p → Circadian AUC={auc:.3f}; expected > 0.5 (better than random)"
+        )
+
+    def test_pirs_score_constitutive_auc_above_chance(self, pipeline):
+        """PIRS score (inverted) should discriminate constitutive genes better than random."""
+        df = self._matched(pipeline, "pirs_score", "Const")
+        if len(df) < 10 or df["Const"].nunique() < 2:
+            pytest.skip("insufficient data for AUC test")
+        auc = roc_auc_score(df["Const"], -df["pirs_score"])
+        assert auc > 0.5, (
+            f"pirs_score → Const AUC={auc:.3f}; expected > 0.5 (better than random)"
+        )
+
+    def test_slope_pval_linear_auc_above_chance(self, pipeline):
+        """slope_pval (inverted) should discriminate linear genes better than random."""
+        df = self._matched(pipeline, "slope_pval", "Linear")
+        if len(df) < 10 or df["Linear"].nunique() < 2:
+            pytest.skip("insufficient data for AUC test")
+        auc = roc_auc_score(df["Linear"], -df["slope_pval"])
+        assert auc > 0.5, (
+            f"slope_pval → Linear AUC={auc:.3f}; expected > 0.5 (better than random)"
+        )

@@ -119,6 +119,6 @@ class analyze:
 
     def calculate_auc(self):
         """Compute AUC for each dataset and store in ``self.roc_auc``."""
-        from circ.visualization.benchmarks import roc_auc
+        from circ.evaluation import roc_auc
         self.roc_auc = roc_auc(self._merged_dict())
         return self.roc_auc
