@@ -127,10 +127,13 @@ constitutive = result[result["label"] == "constitutive"].index
 fig = viz.classification_summary(result, outpath="summary.png")
 
 #    Individual plots can be composed into custom figures:
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-viz.label_distribution(result, ax=axes[0])
-viz.pirs_vs_tau(result, ax=axes[1])
-viz.phase_wheel(result, ax=axes[2])
+fig = plt.figure(figsize=(15, 4))
+ax0 = fig.add_subplot(1, 3, 1)
+ax1 = fig.add_subplot(1, 3, 2)
+ax2 = fig.add_subplot(1, 3, 3, projection="polar")
+viz.label_distribution(result, ax=ax0)
+viz.pirs_vs_tau(result, ax=ax1)
+viz.phase_wheel(result, ax=ax2)
 plt.tight_layout()
 plt.savefig("classification_panels.png", dpi=150, bbox_inches="tight")
 plt.show()
