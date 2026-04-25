@@ -1,4 +1,5 @@
 import multiprocessing
+_mp_ctx = multiprocessing.get_context('forkserver')
 
 import pandas as pd
 import numpy as np
@@ -265,7 +266,7 @@ class ranker:
             pool_size = n_jobs if n_jobs > 0 else None
             actual    = pool_size or multiprocessing.cpu_count()
             chunksize = max(1, len(gene_args) // (actual * 4))
-            with multiprocessing.Pool(pool_size) as pool:
+            with _mp_ctx.Pool(pool_size) as pool:
                 results = list(tqdm(
                     pool.imap(_permutation_worker, gene_args, chunksize=chunksize),
                     total=len(gene_args),
@@ -335,7 +336,7 @@ class ranker:
             pool_size = n_jobs if n_jobs > 0 else None
             actual    = pool_size or multiprocessing.cpu_count()
             chunksize = max(1, len(gene_args) // (actual * 4))
-            with multiprocessing.Pool(pool_size) as pool:
+            with _mp_ctx.Pool(pool_size) as pool:
                 results = list(tqdm(
                     pool.imap(_slope_permutation_worker, gene_args, chunksize=chunksize),
                     total=len(gene_args),

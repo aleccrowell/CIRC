@@ -9,6 +9,7 @@ integrating four complementary tools:
 | `circ.pirs` | Prediction Interval Ranking Score for constitutive expression |
 | `circ.bootjtk` | Bootstrap empirical JTK circadian rhythm detection |
 | `circ.expression_classification` | Unified classifier combining PIRS and BooteJTK |
+| `circ.visualization` | Classification and benchmark plots |
 
 A single `circ` CLI entry point wraps all three core tools, and all modules share
 the same `ZT{HH}_{rep}` column format so outputs chain directly between steps.
@@ -76,39 +77,76 @@ r = ranker(df, anova=False)       # DataFrame passed directly
 ranked = r.pirs_sort()
 ```
 
-## Full pipeline
+## End-to-end example
 
-A typical proteomics circadian experiment using Parquet throughout:
+A complete walkthrough from simulation through visualization, using a
+proteomics-style dataset with batch effects and missing values:
 
 ```python
 from circ.limbr import simulations, imputation, batch_fx
 from circ.expression_classification.classify import Classifier
+import circ.visualization as viz
+import matplotlib.pyplot as plt
 
 # 1. Simulate (or start from real data)
-sim = simulations.simulate(tpoints=12, nrows=500, nreps=2, rseed=42)
+#    n_batch_effects and p_miss add realistic noise for benchmarking.
+sim = simulations.simulate(
+    tpoints=12, nrows=500, nreps=2,
+    pcirc=0.3, plin=0.2,
+    n_batch_effects=2, p_miss=0.3,
+    rseed=42,
+)
 sim.generate_pool_map(out_name="pool_map")
-sim.write_output(out_name="sim")
+# write_proteomics creates sim_with_noise.txt (batch effects + missing as NULL),
+# sim_baseline.txt (clean), and sim_true_classes.txt.
+sim.write_proteomics(out_name="sim")
 
 # 2. Impute missing values — write Parquet for fast downstream reading
 imp = imputation.imputable("sim_with_noise.txt", missingness=0.3, neighbors=10)
 imp.impute_data("imputed.parquet")
 
 # 3. Remove batch effects — reads Parquet, writes Parquet
-#    Diagnostic sidecars (imputed_trends.parquet, _perms.parquet, etc.) are
-#    written alongside the main output with a matching extension.
+#    Diagnostic sidecars (_trends, _perms, _tks, _pep_bias) are written
+#    alongside the main output with a matching extension.
 sva_obj = batch_fx.sva("imputed.parquet", design="c", data_type="p",
                         pool="pool_map.parquet")
 sva_obj.preprocess_default()
 sva_obj.perm_test(nperm=200)
 sva_obj.output_default("normalized.parquet")
 
-# 4. Classify expression patterns — accepts the Parquet path directly
+# 4. Classify expression patterns
 clf = Classifier("normalized.parquet", reps=2)
 result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
 # result.label: constitutive | rhythmic | linear | variable | noisy_rhythmic
 
-# Constitutive genes make good normalization references
+print(result["label"].value_counts())
 constitutive = result[result["label"] == "constitutive"].index
+
+# 5. Visualize results
+#    classification_summary produces an adaptive multi-panel figure.
+fig = viz.classification_summary(result, outpath="summary.png")
+
+#    Individual plots can be composed into custom figures:
+fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+viz.label_distribution(result, ax=axes[0])
+viz.pirs_vs_tau(result, ax=axes[1])
+viz.phase_wheel(result, ax=axes[2])
+plt.tight_layout()
+plt.savefig("classification_panels.png", dpi=150, bbox_inches="tight")
+plt.show()
+
+# 6. Benchmark against simulation ground truth
+#    (Only possible when true labels are known, e.g. from a simulation.)
+import pandas as pd
+true_classes = pd.read_csv("sim_true_classes.txt", sep="\t", index_col=0)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+viz.classification_pr(result, true_classes, ground_truth_col="Const",
+                      ax=axes[0], title="Constitutive PR")
+viz.classification_roc(result, true_classes, ax=axes[1], title="Rhythmic ROC")
+plt.tight_layout()
+plt.savefig("benchmark.png", dpi=150, bbox_inches="tight")
+plt.show()
 ```
 
 Modules can also be composed **in-memory** by passing DataFrames directly —
@@ -404,6 +442,66 @@ When `slope_pvals=False` (default), `run_pirs` computes only the raw PIRS
 score and `classify` falls back to the four-label scheme.  This keeps the
 default path fast for exploratory use.
 
+### `circ.visualization`
+
+Classification plots and benchmark evaluation plots for `Classifier` output.
+All plot functions accept an optional `ax` keyword for composing multi-panel
+figures, and return the `Axes` object.
+
+```python
+import circ.visualization as viz
+import matplotlib.pyplot as plt
+
+# --- Classification plots ---
+# Bar chart of gene counts per label
+viz.label_distribution(result, ax=ax)
+
+# Scatter of PIRS score vs TauMean with decision boundaries
+viz.pirs_vs_tau(result, pirs_percentile=50, tau_threshold=0.5, ax=ax)
+
+# Volcano: PIRS score vs −log₁₀(empirical p-value)
+viz.volcano(result, emp_p_threshold=0.05, ax=ax)
+
+# KDE of PIRS scores split by label
+viz.pirs_score_distribution(result, ax=ax)
+
+# Scatter of TauMean vs −log₁₀(GammaBH)
+viz.tau_pval_scatter(result, ax=ax)
+
+# Polar histogram of estimated phase angles (rhythmic genes only)
+viz.phase_wheel(result, labels=("rhythmic", "noisy_rhythmic"), ax=ax)
+
+# Histogram of estimated periods
+viz.period_distribution(result, reference_period=24.0, ax=ax)
+
+# Adaptive multi-panel summary figure
+fig = viz.classification_summary(result, outpath="summary.png")
+
+# --- Benchmark plots (require simulation ground-truth labels) ---
+import pandas as pd
+true_classes = pd.read_csv("sim_true_classes.txt", sep="\t", index_col=0)
+# Columns: Circadian, Linear, Const (binary 0/1)
+
+# PR curve: how well PIRS score recovers constitutive genes
+viz.classification_pr(result, true_classes, ground_truth_col="Const",
+                      score_col="pirs_score", ax=ax)
+
+# ROC curves: auto-detects available score × truth pairings
+viz.classification_roc(result, true_classes, ax=ax)
+# or specify tasks explicitly: (score_col, truth_col, invert_score)
+viz.classification_roc(result, true_classes,
+                       tasks=[("tau_mean", "Circadian", False),
+                               ("slope_pval", "Linear", True)], ax=ax)
+```
+
+`LABEL_COLORS` maps each label to a consistent hex color for custom plots:
+
+```python
+from circ.visualization import LABEL_COLORS
+# {'constitutive': '#4878CF', 'rhythmic': '#6ACC65', 'linear': '#D65F5F',
+#  'variable': '#B47CC7', 'noisy_rhythmic': '#C4AD66', 'unclassified': '#8C8C8C'}
+```
+
 ### `circ.pirs.rank.rsd_ranker`
 
 ```python
@@ -418,21 +516,34 @@ ranked = r.rsd_sort(outname="rsd_scores.parquet")
 Alternative ranker using Relative Standard Deviation — faster but less
 discriminating than PIRS for large datasets.
 
-### `circ.limbr.simulations.simulate` and `circ.pirs.simulations.simulate`
+### `circ.simulations.simulate`
 
-Both modules expose a `simulate()` factory for generating synthetic datasets
-suitable for method benchmarking:
+Generates a three-class synthetic time-series (circadian / linear / constitutive)
+with optional batch effects and missing data:
 
 ```python
-from circ.limbr.simulations import simulate   # proteomics simulation (with missing data)
-from circ.pirs.simulations import simulate    # expression simulation (const vs rhythmic)
+from circ.simulations import simulate
+# circ.limbr.simulations and circ.pirs.simulations both re-export the same class.
 
-sim = simulate(tpoints=12, nrows=500, nreps=2, pcirc=0.3, rseed=42)
-sim.write_output(out_name="sim")
+# Minimal expression-style simulation (no noise, no missing data)
+sim = simulate(tpoints=12, nrows=500, nreps=2, pcirc=0.3, plin=0.2, rseed=42)
+sim.write_output(out_name="sim")          # sim.txt + sim_true_classes.txt
+
+# Proteomics-style simulation (batch effects + missing data)
+sim = simulate(
+    tpoints=12, nrows=500, nreps=2,
+    pcirc=0.3, plin=0.2,
+    n_batch_effects=2, pbatch=0.5, effect_size=2.0,
+    p_miss=0.3, lam_miss=5,
+    rseed=42,
+)
+sim.generate_pool_map(out_name="pool_map")   # pool_map.parquet
+sim.write_proteomics(out_name="sim")         # sim_with_noise.txt + sim_baseline.txt
+                                             # + sim_true_classes.txt
 ```
 
-The LIMBR simulation additionally supports `generate_pool_map()` for
-proteomics pool control files.
+Key attributes after construction: `sim.classes` (per-row string labels),
+`sim.sim` (clean scaled matrix), `sim.sim_miss` (with batch effects and NaN).
 
 ## License and attribution
 

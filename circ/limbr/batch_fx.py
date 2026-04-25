@@ -2,7 +2,8 @@ import itertools
 
 import numpy as np
 import pandas as pd
-from multiprocess import Pool
+import multiprocess as _mp
+_forkserver_pool = _mp.get_context('forkserver').Pool
 from sklearn import preprocessing
 from sklearn.decomposition import PCA
 from scipy.stats import linregress, f_oneway
@@ -429,7 +430,7 @@ class sva:
             block_design = getattr(self, 'block_design', None)
             chunksize = max(1, int(nperm) // (int(npr) * 4))
             init_args = (self.res, self.tks, self.designtype, tpoints, block_design)
-            with Pool(int(npr), initializer=_init_perm_worker, initargs=init_args) as pool:
+            with _forkserver_pool(int(npr), initializer=_init_perm_worker, initargs=init_args) as pool:
                 output = list(tqdm(
                     pool.imap_unordered(_perm_worker, seeds, chunksize=chunksize),
                     total=int(nperm), desc='permuting', smoothing=0,
