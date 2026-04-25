@@ -246,6 +246,14 @@ class TestPhaseWheel:
         returned = phase_wheel(full_clf, ax=ax)
         assert returned is ax
 
+    def test_fallback_to_all_genes_when_no_rhythmic(self, full_clf):
+        """When no genes carry a rhythmic label, fall back to all genes."""
+        df = full_clf.copy()
+        df['label'] = 'constitutive'  # strip all rhythmic labels
+        ax = phase_wheel(df)
+        assert ax.name == 'polar'
+        assert 'all genes' in ax.get_title()
+
 
 # ---------------------------------------------------------------------------
 # period_distribution
@@ -264,6 +272,22 @@ class TestPeriodDistribution:
         ax = period_distribution(full_clf)
         vlines = [l for l in ax.lines]
         assert len(vlines) >= 1
+
+    def test_fallback_to_all_genes_when_no_rhythmic(self, full_clf):
+        """When no genes carry a rhythmic label, fall back to all genes."""
+        df = full_clf.copy()
+        df['label'] = 'constitutive'
+        ax = period_distribution(df)
+        assert isinstance(ax, matplotlib.axes.Axes)
+        assert 'all genes' in ax.get_title()
+        assert len(ax.patches) > 0  # histogram bars drawn
+
+    def test_constant_period_shows_bars(self, full_clf):
+        """Constant period_mean (all 24 h) must still produce visible bars."""
+        df = full_clf.copy()
+        df['period_mean'] = 24.0
+        ax = period_distribution(df)
+        assert len(ax.patches) > 0
 
 
 # ---------------------------------------------------------------------------

@@ -291,10 +291,13 @@ class TestClassificationPlots:
         assert os.path.exists(outpath)
 
     def test_custom_panel_composition(self, pipeline):
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-        viz.label_distribution(pipeline["result"], ax=axes[0])
-        viz.pirs_vs_tau(pipeline["result"], ax=axes[1])
-        viz.phase_wheel(pipeline["result"], ax=axes[2])
+        fig = plt.figure(figsize=(15, 4))
+        ax0 = fig.add_subplot(1, 3, 1)
+        ax1 = fig.add_subplot(1, 3, 2)
+        ax2 = fig.add_subplot(1, 3, 3, projection='polar')
+        viz.label_distribution(pipeline["result"], ax=ax0)
+        viz.pirs_vs_tau(pipeline["result"], ax=ax1)
+        viz.phase_wheel(pipeline["result"], ax=ax2)
         assert len(fig.axes) == 3
 
 

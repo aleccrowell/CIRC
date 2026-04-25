@@ -58,6 +58,20 @@ def _label_legend(present, ax):
         ax.legend(handles=patches, loc='best', frameon=False, fontsize=8)
 
 
+def _clip_axes_to_data(ax, x_series, y_series, x_pct=(1, 99), y_pct=(0, 99)):
+    """Set axis limits to data percentiles so outliers don't compress the view."""
+    x = x_series.dropna()
+    y = y_series.dropna()
+    if len(x) >= 2:
+        xlo, xhi = np.percentile(x, x_pct)
+        margin = max((xhi - xlo) * 0.05, 1e-6)
+        ax.set_xlim(xlo - margin, xhi + margin)
+    if len(y) >= 2:
+        ylo, yhi = np.percentile(y, y_pct)
+        margin = max((yhi - ylo) * 0.05, 1e-6)
+        ax.set_ylim(max(0.0, ylo - margin), yhi + margin)
+
+
 # ---------------------------------------------------------------------------
 # Public plot functions
 # ---------------------------------------------------------------------------
@@ -182,6 +196,7 @@ def volcano(
                label=f'FDR = {emp_p_threshold}')
     ax.axvline(pirs_cut, color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'PIRS p{int(pirs_percentile)}')
+    _clip_axes_to_data(ax, df['pirs_score'], df['neg_log_emp_p'])
     ax.set_xlabel('PIRS score')
     ax.set_ylabel('−log₁₀(GammaBH)')
     ax.set_title(title)
@@ -214,7 +229,8 @@ def pirs_score_distribution(
     matplotlib.axes.Axes
     """
     ax = _ax(ax)
-    pirs_cut = np.percentile(classifications['pirs_score'].dropna(), pirs_percentile)
+    all_scores = classifications['pirs_score'].dropna()
+    pirs_cut = np.percentile(all_scores, pirs_percentile)
     for lbl in _LABEL_ORDER:
         sub = classifications[classifications['label'] == lbl]['pirs_score'].dropna()
         if len(sub) >= 3:
@@ -222,6 +238,10 @@ def pirs_score_distribution(
                         alpha=0.3, linewidth=1.2)
     ax.axvline(pirs_cut, color='#333333', ls='--', lw=0.9, alpha=0.8,
                label=f'p{int(pirs_percentile)} cut')
+    # Clip x-axis to 1st–99th percentile to avoid outlier compression
+    lo, hi = np.percentile(all_scores, [1, 99])
+    margin = max((hi - lo) * 0.1, 0.05)
+    ax.set_xlim(lo - margin, hi + margin)
     ax.set_xlabel('PIRS score')
     ax.set_ylabel('Density')
     ax.set_title(title)
@@ -269,6 +289,7 @@ def tau_pval_scatter(
                label=f'τ = {tau_threshold}')
     ax.axhline(-np.log10(emp_p_threshold), color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'FDR = {emp_p_threshold}')
+    _clip_axes_to_data(ax, df['tau_mean'], df['neg_log_emp_p'])
     ax.set_xlabel('TauMean')
     ax.set_ylabel('−log₁₀(GammaBH)')
     ax.set_title(title)
@@ -318,6 +339,7 @@ def pirs_pval_scatter(
     ax.axhline(-np.log10(pval_threshold), color='#333333', ls='--', lw=0.9, alpha=0.7,
                label=f'α = {pval_threshold}')
     lbl_used = 'pval_bh' if p_col == 'pval_bh' else 'pval'
+    _clip_axes_to_data(ax, df['pirs_score'], df['neg_log_p'])
     ax.set_xlabel('PIRS score')
     ax.set_ylabel(f'−log₁₀({lbl_used})')
     ax.set_title(title)
@@ -372,6 +394,7 @@ def slope_pval_scatter(
     ax.axvline(pirs_cut, color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'PIRS p{int(pirs_percentile)}')
     lbl_used = 'slope_pval_bh' if p_col == 'slope_pval_bh' else 'slope_pval'
+    _clip_axes_to_data(ax, df['pirs_score'], df['neg_log_slope'])
     ax.set_xlabel('PIRS score')
     ax.set_ylabel(f'−log₁₀({lbl_used})')
     ax.set_title(title)
@@ -437,6 +460,7 @@ def slope_vs_rhythm(
     ax.axhline(-np.log10(emp_p_threshold), color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'rhythm α = {emp_p_threshold}')
     lbl_used = 'slope_pval_bh' if sp_col == 'slope_pval_bh' else 'slope_pval'
+    _clip_axes_to_data(ax, df['neg_log_slope'], df['neg_log_emp_p'])
     ax.set_xlabel(f'−log₁₀({lbl_used})')
     ax.set_ylabel('−log₁₀(GammaBH)')
     ax.set_title(title)
@@ -480,8 +504,8 @@ def phase_wheel(
 
     df = classifications[classifications['label'].isin(labels)].dropna(subset=['phase_mean'])
     if df.empty:
-        ax.set_title(title + ' (no data)')
-        return ax
+        df = classifications.dropna(subset=['phase_mean'])
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
 
     phases_rad = df['phase_mean'] * (2 * np.pi / 24)
     nbins = 12
@@ -496,6 +520,17 @@ def phase_wheel(
     ax.set_xticks(np.linspace(0, 2 * np.pi, 8, endpoint=False))
     hour_labels = [f'ZT{int(h):02d}' for h in np.linspace(0, 24, 8, endpoint=False)]
     ax.set_xticklabels(hour_labels, fontsize=8)
+
+    # Show integer counts on the radial axis and label each bar
+    max_count = max(counts) if counts.max() > 0 else 1
+    ax.set_rmax(max_count * 1.25)
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True, nbins=4))
+    ax.tick_params(axis='y', labelsize=7, labelcolor='#555555')
+    for angle, count in zip(bins[:-1] + widths / 2, counts):
+        if count > 0:
+            ax.text(angle, count + max_count * 0.07, str(count),
+                    ha='center', va='bottom', fontsize=7, color='#333333')
+
     ax.set_title(title, pad=15)
     return ax
 
@@ -532,13 +567,38 @@ def period_distribution(
         raise ValueError("'period_mean' column is required. Call run_bootjtk() first.")
 
     ax = _ax(ax)
-    for lbl in labels:
-        sub = classifications[classifications['label'] == lbl]['period_mean'].dropna()
+
+    # Collect data for the requested labels; fall back to all genes if none qualify
+    label_subsets = {
+        lbl: classifications[classifications['label'] == lbl]['period_mean'].dropna()
+        for lbl in labels
+    }
+    has_data = any(not s.empty for s in label_subsets.values())
+    if not has_data:
+        all_genes = classifications['period_mean'].dropna()
+        label_subsets = {'(all genes)': all_genes}
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
+
+    all_periods = pd.concat(list(label_subsets.values())) if label_subsets else pd.Series(dtype=float)
+    data_range = all_periods.max() - all_periods.min() if len(all_periods) > 1 else 0.0
+
+    if data_range < 1.0:
+        # Discrete or constant periods (e.g., all 24 h) — use a fixed window
+        xlo, xhi = reference_period - 6, reference_period + 6
+        bins = np.arange(xlo, xhi + 2, 2)  # 2-h bins across ±6 h window
+    else:
+        xlo = all_periods.min() - 1
+        xhi = all_periods.max() + 1
+        bins = min(20, max(5, int(data_range)))
+
+    for lbl, sub in label_subsets.items():
         if not sub.empty:
-            ax.hist(sub, bins=20, color=LABEL_COLORS.get(lbl, '#8C8C8C'),
+            ax.hist(sub, bins=bins, color=LABEL_COLORS.get(lbl, '#8C8C8C'),
                     alpha=0.6, label=lbl, edgecolor='white')
+
     ax.axvline(reference_period, color='#333333', ls='--', lw=0.9, alpha=0.8,
                label=f'{reference_period:.0f} h')
+    ax.set_xlim(xlo, xhi)
     ax.set_xlabel('Period (h)')
     ax.set_ylabel('Gene count')
     ax.set_title(title)
