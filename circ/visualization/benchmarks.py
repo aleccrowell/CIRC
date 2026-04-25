@@ -243,6 +243,17 @@ def classification_roc(
         if 'slope_pval' in classifications.columns and 'Linear' in true_classes.columns:
             tasks.append(('slope_pval', 'Linear', True))
 
+    # Human-readable descriptions for each (score, truth) task pair
+    _task_names = {
+        ('pirs_score', 'Const'):      'PIRS score → constitutive',
+        ('tau_mean',   'Circadian'):  'TauMean → circadian',
+        ('emp_p',      'Circadian'):  'GammaBH p-val → circadian',
+        ('pval',       'Const'):      'PIRS p-val → constitutive',
+        ('pval_bh',    'Const'):      'PIRS p-val (BH) → constitutive',
+        ('slope_pval', 'Linear'):     'slope p-val → linear',
+        ('slope_pval_bh', 'Linear'):  'slope p-val (BH) → linear',
+    }
+
     palette = sns.color_palette('muted', n_colors=max(len(tasks), 1))
     for (score_col, truth_col, invert), color in zip(tasks, palette):
         merged = classifications[[score_col]].join(
@@ -253,15 +264,17 @@ def classification_roc(
         scores = -merged[score_col].values if invert else merged[score_col].values
         fpr, tpr, _ = roc_curve(merged[truth_col].values, scores, pos_label=1)
         auc_val = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color=color, lw=1.2,
-                label=f'{score_col}→{truth_col}  AUC={auc_val:.3f}')
+        label = _task_names.get((score_col, truth_col), f'{score_col} → {truth_col}')
+        ax.plot(fpr, tpr, color=color, lw=1.2, label=f'{label}  (AUC={auc_val:.3f})')
 
-    ax.plot([0, 1], [0, 1], color='#999999', ls='--', lw=0.8, label='random')
+    ax.plot([0, 1], [0, 1], color='#999999', ls='--', lw=0.8, label='random (AUC=0.5)')
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.05)
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
     ax.set_title(title)
+    ax.text(0.01, 0.01, 'Each curve: does score rank its gene class above others?',
+            transform=ax.transAxes, fontsize=7, color='#666666', va='bottom')
     ax.legend(loc='lower right', frameon=False, fontsize=8)
     sns.despine(ax=ax)
     return ax
