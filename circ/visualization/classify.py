@@ -504,8 +504,8 @@ def phase_wheel(
 
     df = classifications[classifications['label'].isin(labels)].dropna(subset=['phase_mean'])
     if df.empty:
-        ax.set_title(title + ' (no data)')
-        return ax
+        df = classifications.dropna(subset=['phase_mean'])
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
 
     phases_rad = df['phase_mean'] * (2 * np.pi / 24)
     nbins = 12
@@ -567,15 +567,19 @@ def period_distribution(
         raise ValueError("'period_mean' column is required. Call run_bootjtk() first.")
 
     ax = _ax(ax)
-    all_periods = pd.concat([
-        classifications[classifications['label'] == lbl]['period_mean'].dropna()
-        for lbl in labels
-        if not classifications[classifications['label'] == lbl]['period_mean'].dropna().empty
-    ]) if any(
-        not classifications[classifications['label'] == lbl]['period_mean'].dropna().empty
-        for lbl in labels
-    ) else pd.Series(dtype=float)
 
+    # Collect data for the requested labels; fall back to all genes if none qualify
+    label_subsets = {
+        lbl: classifications[classifications['label'] == lbl]['period_mean'].dropna()
+        for lbl in labels
+    }
+    has_data = any(not s.empty for s in label_subsets.values())
+    if not has_data:
+        all_genes = classifications['period_mean'].dropna()
+        label_subsets = {'(all genes)': all_genes}
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
+
+    all_periods = pd.concat(list(label_subsets.values())) if label_subsets else pd.Series(dtype=float)
     data_range = all_periods.max() - all_periods.min() if len(all_periods) > 1 else 0.0
 
     if data_range < 1.0:
@@ -587,8 +591,7 @@ def period_distribution(
         xhi = all_periods.max() + 1
         bins = min(20, max(5, int(data_range)))
 
-    for lbl in labels:
-        sub = classifications[classifications['label'] == lbl]['period_mean'].dropna()
+    for lbl, sub in label_subsets.items():
         if not sub.empty:
             ax.hist(sub, bins=bins, color=LABEL_COLORS.get(lbl, '#8C8C8C'),
                     alpha=0.6, label=lbl, edgecolor='white')
