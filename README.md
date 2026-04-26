@@ -77,80 +77,23 @@ r = ranker(df, anova=False)       # DataFrame passed directly
 ranked = r.pirs_sort()
 ```
 
-## End-to-end example
+## Examples
 
-A complete walkthrough from simulation through visualization, using a
-proteomics-style dataset with batch effects and missing values:
+Six self-contained scripts in [`examples/`](examples/) walk through the full
+CIRC workflow — from a single classification run to a proteomics pipeline with
+batch-effect removal, validation, and visualization.  See the
+[examples README](examples/README.md) for the full catalogue.
 
-```python
-from circ.limbr import simulations, imputation, batch_fx
-from circ.expression_classification.classify import Classifier
-import circ.visualization as viz
-import matplotlib.pyplot as plt
+```bash
+# Quickest start: classify simulated data and explore the results
+poetry run python examples/01_classify_and_explore.py
 
-# 1. Simulate (or start from real data)
-#    n_batch_effects and p_miss add realistic noise for benchmarking.
-sim = simulations.simulate(
-    tpoints=12, nrows=500, nreps=2,
-    pcirc=0.3, plin=0.2,
-    n_batch_effects=2, p_miss=0.3,
-    rseed=42,
-)
-sim.generate_pool_map(out_name="pool_map")
-# write_proteomics creates sim_with_noise.txt (batch effects + missing as NULL),
-# sim_baseline.txt (clean), and sim_true_classes.txt.
-sim.write_proteomics(out_name="sim")
-
-# 2. Impute missing values — write Parquet for fast downstream reading
-imp = imputation.imputable("sim_with_noise.txt", missingness=0.3, neighbors=10)
-imp.impute_data("imputed.parquet")
-
-# 3. Remove batch effects — reads Parquet, writes Parquet
-#    Diagnostic sidecars (_trends, _perms, _tks, _pep_bias) are written
-#    alongside the main output with a matching extension.
-sva_obj = batch_fx.sva("imputed.parquet", design="c", data_type="p",
-                        pool="pool_map.parquet")
-sva_obj.preprocess_default()
-sva_obj.perm_test(nperm=200)
-sva_obj.output_default("normalized.parquet")
-
-# 4. Classify expression patterns
-clf = Classifier("normalized.parquet", reps=2)
-result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
-# result.label: constitutive | rhythmic | linear | variable | noisy_rhythmic
-
-print(result["label"].value_counts())
-constitutive = result[result["label"] == "constitutive"].index
-
-# 5. Visualize results
-#    classification_summary produces an adaptive multi-panel figure.
-fig = viz.classification_summary(result, outpath="summary.png")
-
-#    Individual plots can be composed into custom figures:
-fig = plt.figure(figsize=(15, 4))
-ax0 = fig.add_subplot(1, 3, 1)
-ax1 = fig.add_subplot(1, 3, 2)
-ax2 = fig.add_subplot(1, 3, 3, projection="polar")
-viz.label_distribution(result, ax=ax0)
-viz.pirs_vs_tau(result, ax=ax1)
-viz.phase_wheel(result, ax=ax2)
-plt.tight_layout()
-plt.savefig("classification_panels.png", dpi=150, bbox_inches="tight")
-plt.show()
-
-# 6. Benchmark against simulation ground truth
-#    (Only possible when true labels are known, e.g. from a simulation.)
-import pandas as pd
-true_classes = pd.read_csv("sim_true_classes.txt", sep="\t", index_col=0)
-
-fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-viz.classification_pr(result, true_classes, ground_truth_col="Const",
-                      ax=axes[0], title="Constitutive PR")
-viz.classification_roc(result, true_classes, ax=axes[1], title="Rhythmic ROC")
-plt.tight_layout()
-plt.savefig("benchmark.png", dpi=150, bbox_inches="tight")
-plt.show()
+# Full proteomics pipeline: impute → batch-correct → classify → benchmark
+poetry run python examples/04_proteomics_pipeline.py
 ```
+
+Pass `--show` to any script to display figures interactively in addition to
+saving them.  All figures are written to `./figures/`.
 
 Modules can also be composed **in-memory** by passing DataFrames directly —
 no intermediate files required:
