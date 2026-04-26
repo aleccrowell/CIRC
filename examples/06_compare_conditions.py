@@ -4,8 +4,19 @@ Use case:
     You have run the classifier on two datasets — for example, wild-type vs
     knockout, or two tissue types — and want to understand what changed:
     which label categories shifted, which rhythmic genes gained or lost
-    rhythmicity, and whether the same genes serve as stable housekeepers
-    in both conditions.
+    rhythmicity, whether the same genes serve as stable housekeepers in both
+    conditions, and which changes are statistically significant.
+
+How it works:
+    ``circ.compare.compare_conditions`` joins the two result DataFrames on
+    shared gene IDs and computes:
+
+    * Effect sizes: Δ TauMean, Δ PIRS score, circular Δ phase (±12 h)
+    * Rhythmicity status per gene: gained / lost / maintained / never rhythmic
+    * Statistical tests (when BooteJTK uncertainty columns are present):
+        - Welch's t-test on TauMean using the bootstrap SD from each condition
+        - z-test on the circular phase shift for genes rhythmic in both
+      Both tests apply Benjamini–Hochberg FDR correction across all genes.
 
 Run:
     poetry run python examples/06_compare_conditions.py
@@ -35,6 +46,7 @@ from circ.simulations import simulate
 from circ.expression_classification.classify import Classifier
 from circ.visualization import LABEL_COLORS
 import circ.visualization as viz
+from circ.compare import compare_conditions, label_change_table
 
 try:
     import circ.visualization.interactive as iviz
@@ -46,7 +58,7 @@ FIGURES = Path("figures")
 FIGURES.mkdir(exist_ok=True)
 
 COND_LABELS = ("Condition A (WT-like)", "Condition B (KO-like)")
-COND_COLORS = ("#4878CF", "#D65F5F")   # blue / red
+COND_COLORS = ("#4878CF", "#D65F5F")
 
 # ---------------------------------------------------------------------------
 # 1. Setup — two simulations sharing the same gene IDs
@@ -71,6 +83,8 @@ def _make_expr(sim):
 expr_A = _make_expr(sim_A)
 expr_B = _make_expr(sim_B)
 
+# run_all() includes tau_std, phase_std, and n_boots — the bootstrap uncertainty
+# estimates from BooteJTK that compare_conditions() needs for statistical tests.
 print("Classifying condition A …")
 clf_A = Classifier(expr_A, reps=2)
 result_A = clf_A.run_all(pvals=True, slope_pvals=True, n_permutations=200, n_jobs=1)
@@ -87,9 +101,8 @@ print(result_B["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 # 2. Label distribution comparison
 #
-# Side-by-side bar charts reveal which label categories expanded or shrank
-# between conditions.  In a clock-disrupted condition you expect fewer
-# rhythmic genes and potentially more variable or linear ones.
+# Side-by-side bar charts reveal which label categories expanded or shrank.
+# A shared x-axis makes gene counts visually comparable between conditions.
 # ---------------------------------------------------------------------------
 print("Section 1: Label distribution comparison …")
 
@@ -97,7 +110,6 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
 viz.label_distribution(result_A, ax=axes[0], title=COND_LABELS[0])
 viz.label_distribution(result_B, ax=axes[1], title=COND_LABELS[1])
 
-# Shared x-axis range so gene counts are visually comparable across conditions
 xmax = max(axes[0].get_xlim()[1], axes[1].get_xlim()[1])
 axes[0].set_xlim(0, xmax)
 axes[1].set_xlim(0, xmax)
@@ -111,9 +123,9 @@ print(f"  saved → {out}")
 # ---------------------------------------------------------------------------
 # 3. Phase distribution comparison
 #
-# Overlaying the phase wheels from both conditions shows whether the timing
-# of peak expression shifted.  If the KO delays or advances the phase of
-# rhythmic genes, you will see the angular distribution rotate.
+# Overlaying the phase wheels shows whether the timing of peak expression
+# shifted.  If the KO delays or advances rhythmic gene phases, the angular
+# distribution will rotate.
 # ---------------------------------------------------------------------------
 print("Section 2: Phase wheel comparison …")
 
@@ -133,10 +145,8 @@ print(f"  saved → {out}")
 # ---------------------------------------------------------------------------
 # 4. Constitutive gene overlap
 #
-# Genes that are constitutively expressed in BOTH conditions are the most
-# reliable internal reference gene candidates — their stability is not
-# condition-specific.  Genes constitutive in only one condition should be
-# used with caution.
+# Genes constitutive in BOTH conditions are the most reliable reference
+# gene candidates — their stability is not condition-specific.
 # ---------------------------------------------------------------------------
 print("Section 3: Constitutive gene overlap …")
 
@@ -150,24 +160,21 @@ print(f"  Constitutive in A only : {len(only_A)}")
 print(f"  Constitutive in both   : {len(both)}")
 print(f"  Constitutive in B only : {len(only_B)}\n")
 
-# Side-by-side top_constitutive_candidates; highlight shared genes
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 viz.top_constitutive_candidates(result_A, n_top=15, ax=axes[0],
                                 title=f"Top candidates — {COND_LABELS[0]}")
 viz.top_constitutive_candidates(result_B, n_top=15, ax=axes[1],
                                 title=f"Top candidates — {COND_LABELS[1]}")
 
-# Mark genes that appear in both conditions' top-15 lists
 top15_A = set(result_A.dropna(subset=["pirs_score"]).nsmallest(15, "pirs_score").index)
 top15_B = set(result_B.dropna(subset=["pirs_score"]).nsmallest(15, "pirs_score").index)
 shared_top = top15_A & top15_B
 if shared_top:
     for ax in axes:
-        ytick_labels = [t.get_text() for t in ax.get_yticklabels()]
-        for i, lbl in enumerate(ytick_labels):
-            if lbl in shared_top:
-                ax.get_yticklabels()[i].set_fontweight("bold")
-                ax.get_yticklabels()[i].set_color("#2E8B57")
+        for tick in ax.get_yticklabels():
+            if tick.get_text() in shared_top:
+                tick.set_fontweight("bold")
+                tick.set_color("#2E8B57")
 
 shared_patch = mpatches.Patch(color="#2E8B57",
                               label=f"In both top-15 ({len(shared_top)} genes)")
@@ -180,92 +187,101 @@ plt.close(fig)
 print(f"  saved → {out}")
 
 # ---------------------------------------------------------------------------
-# 5. Rhythmicity scatter — TauMean A vs TauMean B
+# 5. Statistical comparison — compare_conditions()
 #
-# Each point is one gene.  Points above the diagonal gained rhythmicity in
-# condition B; points below lost it.  Color encodes whether the gene was
-# called rhythmic in both, one, or neither condition.
+# Joins the two result DataFrames on shared gene IDs and returns:
+#   - Effect sizes: delta_tau, delta_pirs, delta_phase
+#   - Rhythmicity status per gene (gained / lost / maintained / never)
+#   - tau_pval / tau_padj: Welch t-test on bootstrap TauMean distributions
+#   - phase_pval / phase_padj: z-test on circular phase shift
 # ---------------------------------------------------------------------------
-print("Section 4: Rhythmicity shift scatter …")
+print("Section 4: Statistical comparison …")
 
-# Rhythmic = in (rhythmic | noisy_rhythmic) label
-rhythmic_A = set(result_A[result_A["label"].isin(["rhythmic", "noisy_rhythmic"])].index)
-rhythmic_B = set(result_B[result_B["label"].isin(["rhythmic", "noisy_rhythmic"])].index)
+comparison = compare_conditions(result_A, result_B)
 
-tau = result_A[["tau_mean"]].join(result_B[["tau_mean"]], lsuffix="_A", rsuffix="_B",
-                                  how="inner").dropna()
+print("\nRhythmicity status breakdown:")
+print(comparison["rhythmicity_status"].value_counts().to_string())
 
-def _rhythm_category(gene_id):
-    in_A = gene_id in rhythmic_A
-    in_B = gene_id in rhythmic_B
-    if in_A and in_B:   return "rhythmic in both",  "#6ACC65"
-    if in_A:            return "only in A",          COND_COLORS[0]
-    if in_B:            return "only in B",          COND_COLORS[1]
-    return                     "not rhythmic",       "#CCCCCC"
+sig_tau   = comparison["tau_padj"].lt(0.05).sum()
+sig_phase = comparison["phase_padj"].lt(0.05).sum() if "phase_padj" in comparison.columns else 0
+print(f"\nSignificant tau changes  (tau_padj < 0.05) : {sig_tau}")
+print(f"Significant phase shifts (phase_padj < 0.05): {sig_phase}")
 
-tau["category"], tau["color"] = zip(*[_rhythm_category(g) for g in tau.index])
+print("\nLabel transition table (A → B):")
+print(label_change_table(comparison).to_string(), "\n")
 
-fig, ax = plt.subplots(figsize=(6, 6))
-for cat, color in [
-    ("not rhythmic",   "#CCCCCC"),
-    ("only in A",      COND_COLORS[0]),
-    ("only in B",      COND_COLORS[1]),
-    ("rhythmic in both", "#6ACC65"),
-]:
-    sub = tau[tau["category"] == cat]
-    if sub.empty:
-        continue
-    ax.scatter(sub["tau_mean_A"], sub["tau_mean_B"],
-               color=color, s=10, alpha=0.6, label=f"{cat} (n={len(sub)})",
-               rasterized=len(tau) > 500)
-
-lim = max(tau["tau_mean_A"].max(), tau["tau_mean_B"].max()) * 1.05
-ax.plot([0, lim], [0, lim], color="#999999", ls="--", lw=0.8, alpha=0.7)
-ax.set_xlim(0, lim)
-ax.set_ylim(0, lim)
-ax.set_xlabel(f"TauMean — {COND_LABELS[0]}")
-ax.set_ylabel(f"TauMean — {COND_LABELS[1]}")
-ax.set_title("Rhythmicity shift: TauMean per condition")
-ax.legend(loc="upper left", frameon=False, fontsize=8, markerscale=1.5)
-sns.despine(ax=ax)
-
-plt.tight_layout()
-out = FIGURES / "23_rhythmicity_shift.png"
-fig.savefig(out, dpi=150, bbox_inches="tight")
+# comparison_summary auto-selects panels from: rhythmicity shift scatter,
+# label transition heatmap, phase shift histogram, and delta tau volcano.
+fig = viz.comparison_summary(
+    comparison,
+    outpath=str(FIGURES / "23_comparison_summary.png"),
+)
 plt.close(fig)
-print(f"  saved → {out}")
+print(f"  saved → {FIGURES / '23_comparison_summary.png'}")
 
 # ---------------------------------------------------------------------------
-# 6. Interactive condition comparison
+# 6. Top genes with significant rhythmicity or phase changes
+# ---------------------------------------------------------------------------
+print("Section 5: Top significant genes …")
+
+sig = comparison[comparison["tau_padj"] < 0.05]
+lost = sig[sig["rhythmicity_status"] == "lost"].nsmallest(5, "delta_tau")
+gained = sig[sig["rhythmicity_status"] == "gained"].nlargest(5, "delta_tau")
+
+if not lost.empty:
+    print("\nTop genes losing rhythmicity (tau_padj < 0.05):")
+    print(lost[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]].to_string())
+
+if not gained.empty:
+    print("\nTop genes gaining rhythmicity (tau_padj < 0.05):")
+    print(gained[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]].to_string())
+
+if "phase_padj" in comparison.columns:
+    sig_phase_df = comparison[
+        comparison["phase_padj"].lt(0.05) &
+        comparison["rhythmicity_status"].eq("maintained_rhythmic")
+    ].copy()
+    if not sig_phase_df.empty:
+        sig_phase_df["abs_shift"] = sig_phase_df["delta_phase"].abs()
+        print("\nTop genes with significant phase shifts (phase_padj < 0.05):")
+        print(sig_phase_df.nlargest(5, "abs_shift")[
+            ["phase_A", "phase_B", "delta_phase", "phase_padj"]
+        ].to_string())
+
+# ---------------------------------------------------------------------------
+# 7. Interactive condition comparison
 # ---------------------------------------------------------------------------
 if _HAS_PLOTLY:
-    print("Section 5: Interactive figures …")
+    print("\nSection 6: Interactive figure …")
 
-    # Hover to identify which genes changed rhythmicity
-    hover_texts = []
-    for gene_id, row in tau.iterrows():
-        txt = (f"<b>{gene_id}</b><br>"
-               f"TauMean A: {row['tau_mean_A']:.3f}<br>"
-               f"TauMean B: {row['tau_mean_B']:.3f}<br>"
-               f"{row['category']}")
-        hover_texts.append(txt)
+    hover_texts = [
+        f"<b>{g}</b><br>"
+        f"TauMean A: {row['tau_mean_A']:.3f}<br>"
+        f"TauMean B: {row['tau_mean_B']:.3f}<br>"
+        f"Δ tau: {row['delta_tau']:+.3f}<br>"
+        f"{row['rhythmicity_status']}"
+        for g, row in comparison.iterrows()
+    ]
 
     import plotly.graph_objects as go
+
+    _STATUS_COLORS = {
+        'maintained_rhythmic':    '#6ACC65',
+        'gained':                 '#D65F5F',
+        'lost':                   '#4878CF',
+        'maintained_nonrhythmic': '#CCCCCC',
+    }
     traces = []
-    for cat, color in [
-        ("not rhythmic",    "#CCCCCC"),
-        ("only in A",       COND_COLORS[0]),
-        ("only in B",       COND_COLORS[1]),
-        ("rhythmic in both","#6ACC65"),
-    ]:
-        sub  = tau[tau["category"] == cat]
-        htxt = [hover_texts[tau.index.get_loc(g)] for g in sub.index]
+    lim = max(comparison["tau_mean_A"].max(), comparison["tau_mean_B"].max()) * 1.05
+    for status, color in _STATUS_COLORS.items():
+        sub  = comparison[comparison["rhythmicity_status"] == status]
+        htxt = [hover_texts[comparison.index.get_loc(g)] for g in sub.index]
         if sub.empty:
             continue
         traces.append(go.Scatter(
             x=sub["tau_mean_A"], y=sub["tau_mean_B"],
             mode="markers",
-            name=f"{cat} (n={len(sub)})",
+            name=f"{status} (n={len(sub)})",
             marker=dict(color=color, size=5, opacity=0.7),
             hovertext=htxt,
             hovertemplate="%{hovertext}<extra></extra>",

@@ -15,6 +15,15 @@ Classification plots
    period_distribution
    classification_summary
 
+Condition comparison plots
+--------------------------
+.. autosummary::
+   rhythmicity_shift_scatter
+   phase_shift_histogram
+   label_transition_heatmap
+   delta_tau_volcano
+   comparison_summary
+
 Benchmark / evaluation plots
 -----------------------------
 .. autosummary::
@@ -45,6 +54,13 @@ from circ.visualization.classify import (
     threshold_sensitivity,
     classification_summary,
 )
+from circ.visualization.compare import (
+    rhythmicity_shift_scatter,
+    phase_shift_histogram,
+    label_transition_heatmap,
+    delta_tau_volcano,
+    comparison_summary,
+)
 from circ.evaluation import roc_auc
 from circ.visualization.benchmarks import (
     pr_curve,
@@ -71,6 +87,12 @@ __all__ = [
     'mean_expression_profiles',
     'threshold_sensitivity',
     'classification_summary',
+    # compare
+    'rhythmicity_shift_scatter',
+    'phase_shift_histogram',
+    'label_transition_heatmap',
+    'delta_tau_volcano',
+    'comparison_summary',
     # benchmarks
     'pr_curve',
     'roc_curve_plot',
