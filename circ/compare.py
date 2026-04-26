@@ -6,6 +6,14 @@ runs and returns a per-gene summary of effect sizes and, when BooteJTK
 uncertainty columns (``tau_std``, ``phase_std``, ``n_boots``) are present,
 FDR-corrected significance tests.
 
+Cross-omic comparisons (proteomics vs. gene expression)
+-------------------------------------------------------
+Proteomics data is classified at peptide level and carries a
+``(Peptide, Protein)`` MultiIndex.  Before passing such results to
+:func:`compare_conditions`, collapse them to protein level with
+:func:`aggregate_to_protein`.  The Protein identifiers must then overlap
+with the gene IDs in the expression result.
+
 Statistical methods
 -------------------
 **Rhythmicity change (TauMean)**
@@ -30,6 +38,62 @@ from scipy import stats
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def aggregate_to_protein(result):
+    """Aggregate peptide-level classifier results to the protein level.
+
+    When proteomics data is classified at peptide level the result carries a
+    ``(Peptide, Protein)`` MultiIndex.  This function collapses it to a
+    single-level index on ``Protein`` so the result can be compared with gene
+    expression results via :func:`compare_conditions`.
+
+    Aggregation rules:
+
+    * **numeric columns** — mean across all peptides for the same protein
+    * **phase_mean** — circular mean (period 24 h) to handle wrap-around
+    * **label** — majority vote; ties broken by the first label alphabetically
+
+    Parameters
+    ----------
+    result : pd.DataFrame
+        Classifier output with a ``(Peptide, Protein)`` MultiIndex, as
+        produced when the expression data uses a proteomics-style multi-index.
+        If *result* already has a flat index it is returned unchanged.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same columns as *result*, indexed by ``Protein``.
+    """
+    if not isinstance(result.index, pd.MultiIndex):
+        return result.copy()
+
+    protein = result.index.get_level_values('Protein')
+    df = result.copy()
+    df.index = pd.Index(protein, name='Protein')
+
+    numeric_cols = set(df.select_dtypes(include='number').columns)
+    agg = {}
+    for col in df.columns:
+        if col == 'phase_mean':
+            continue
+        elif col == 'label':
+            agg[col] = _majority_label
+        elif col in numeric_cols:
+            agg[col] = 'mean'
+
+    out = df.groupby(df.index, sort=False).agg(agg) if agg else pd.DataFrame(index=df.index.unique())
+
+    if 'phase_mean' in df.columns:
+        angles = 2 * np.pi * df['phase_mean'].values / 24.0
+        sin_s = pd.Series(np.sin(angles), index=df.index)
+        cos_s = pd.Series(np.cos(angles), index=df.index)
+        sin_mean = sin_s.groupby(df.index, sort=False).mean()
+        cos_mean = cos_s.groupby(df.index, sort=False).mean()
+        out['phase_mean'] = (np.arctan2(sin_mean, cos_mean) * 24 / (2 * np.pi)) % 24
+
+    return out.reindex(columns=[c for c in result.columns if c in out.columns])
+
 
 def compare_conditions(
     result_A,
@@ -76,11 +140,21 @@ def compare_conditions(
         * ``phase_pval``, ``phase_padj`` — z-test on phase shift
           (only for genes rhythmic in both conditions)
     """
+    for _name, _res in (('result_A', result_A), ('result_B', result_B)):
+        if isinstance(_res.index, pd.MultiIndex):
+            raise ValueError(
+                f"{_name} has a MultiIndex (peptide-level proteomics data). "
+                "Call aggregate_to_protein(result) first to collapse to protein "
+                "level before comparing."
+            )
+
     shared = result_A.index.intersection(result_B.index)
     if len(shared) == 0:
         raise ValueError(
             "result_A and result_B share no gene IDs. "
-            "Check that both DataFrames are indexed by the same gene identifiers."
+            "Check that both DataFrames are indexed by the same identifiers. "
+            "For proteomics vs. gene expression comparisons, call "
+            "aggregate_to_protein() first and ensure Protein IDs match gene IDs."
         )
 
     A = result_A.loc[shared]
@@ -157,6 +231,11 @@ def label_change_table(comparison):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _majority_label(series):
+    """Return the most common label; ties broken alphabetically."""
+    return series.mode().iloc[0]
+
 
 def _circular_diff(a, b, period=24.0):
     """Signed circular difference b − a, wrapped to (−period/2, +period/2]."""
