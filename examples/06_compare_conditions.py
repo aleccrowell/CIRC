@@ -57,31 +57,49 @@ except ImportError:
 FIGURES = Path("figures")
 FIGURES.mkdir(exist_ok=True)
 
-COND_LABELS = ("Condition A (WT-like)", "Condition B (KO-like)")
+COND_LABELS = ("Condition A (reference)", "Condition B (phase-shifted)")
 COND_COLORS = ("#4878CF", "#D65F5F")
 
 # ---------------------------------------------------------------------------
 # 1. Setup — two simulations sharing the same gene IDs
 #
-# Condition A: higher circadian fraction (more rhythmic genes)
-# Condition B: lower circadian fraction, more linear (e.g., clock-disrupted)
+# The simulation is split into two parts so that the two conditions share a
+# realistic set of rhythmic genes:
 #
-# Both use the same gene_ids so downstream overlap analyses are meaningful.
+#   Shared core (gene_0000–gene_0059): 60 genes simulated as fully rhythmic
+#     in both conditions but with independent random phases, mimicking genes
+#     that oscillate in both conditions but peak at different times.
+#
+#   Condition-specific background (gene_0060–gene_0299):
+#     Condition A has additional rhythmic and linear genes; Condition B has
+#     fewer rhythmic genes and more linear ones (clock-disrupted background).
+#
+# This structure ensures that the phase shift histogram (genes rhythmic in
+# BOTH conditions) contains real data.  With purely independent simulations
+# the rhythmic gene sets rarely overlap at typical detection thresholds.
 # ---------------------------------------------------------------------------
-print("Simulating condition A …")
-sim_A = simulate(tpoints=8, nrows=300, nreps=2, pcirc=0.30, plin=0.10, rseed=1)
-print("Simulating condition B …")
-sim_B = simulate(tpoints=8, nrows=300, nreps=2, pcirc=0.10, plin=0.25, rseed=2)
+print("Simulating shared rhythmic core …")
+sim_core_A = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=10)
+sim_core_B = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=11)
 
-gene_ids = [f"gene_{i:04d}" for i in range(sim_A.nrows)]
+print("Simulating condition-specific backgrounds …")
+sim_bg_A = simulate(tpoints=8, nrows=240, nreps=2, pcirc=0.20, plin=0.10, rseed=1)
+sim_bg_B = simulate(tpoints=8, nrows=240, nreps=2, pcirc=0.05, plin=0.25, rseed=2)
 
-def _make_expr(sim):
-    df = pd.DataFrame(sim.sim, index=gene_ids, columns=sim.cols)
-    df.index.name = "#"
-    return df
+gene_ids = [f"gene_{i:04d}" for i in range(300)]
+cols = sim_core_A.cols
 
-expr_A = _make_expr(sim_A)
-expr_B = _make_expr(sim_B)
+expr_A = pd.DataFrame(
+    np.vstack([sim_core_A.sim, sim_bg_A.sim]),
+    index=gene_ids, columns=cols,
+)
+expr_A.index.name = "#"
+
+expr_B = pd.DataFrame(
+    np.vstack([sim_core_B.sim, sim_bg_B.sim]),
+    index=gene_ids, columns=cols,
+)
+expr_B.index.name = "#"
 
 # run_all() includes tau_std, phase_std, and n_boots — the bootstrap uncertainty
 # estimates from BooteJTK that compare_conditions() needs for statistical tests.
