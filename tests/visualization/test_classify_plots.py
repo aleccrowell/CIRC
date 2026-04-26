@@ -298,13 +298,14 @@ class TestClassificationSummary:
     def test_returns_figure_minimal(self, minimal_clf):
         fig = classification_summary(minimal_clf)
         assert isinstance(fig, plt.Figure)
-        # minimal: always 3 panels
-        assert len(fig.axes) == 3
+        # always: label_distribution + pirs_vs_tau + pirs_score_distribution
+        #         + top_constitutive_candidates = 4
+        assert len(fig.axes) == 4
 
     def test_returns_figure_full(self, full_clf):
         fig = classification_summary(full_clf)
         assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) > 3
+        assert len(fig.axes) > 4
 
     def test_saves_to_file(self, full_clf, tmp_path):
         out = str(tmp_path / 'summary.png')
@@ -314,13 +315,14 @@ class TestClassificationSummary:
 
     def test_minimal_has_correct_panel_count(self, minimal_clf):
         fig = classification_summary(minimal_clf)
-        # label_distribution + pirs_vs_tau + pirs_score_distribution = 3
-        assert len(fig.axes) == 3
+        # label_distribution + pirs_vs_tau + pirs_score_distribution
+        # + top_constitutive_candidates = 4
+        assert len(fig.axes) == 4
 
     def test_with_emp_p_adds_two_panels(self, minimal_clf):
         df = minimal_clf.copy()
         rng = np.random.default_rng(2)
         df['emp_p'] = rng.uniform(0, 1, len(df))
         fig = classification_summary(df)
-        # 3 base + 2 (volcano + tau_pval_scatter) = 5
-        assert len(fig.axes) == 5
+        # 4 base + 2 (volcano + tau_pval_scatter) = 6
+        assert len(fig.axes) == 6

@@ -4,6 +4,9 @@ Classification plots and benchmark evaluation plots for `Classifier` output.
 All plot functions accept an optional `ax` keyword for composing multi-panel
 figures, and return the `Axes` object.
 
+For interactive (Plotly) versions of these plots see
+[`circ.visualization.interactive`](#cirvisualizationinteractive--interactive-plotly-plots).
+
 ## Python API
 
 ```python
@@ -58,4 +61,39 @@ viz.classification_roc(result, true_classes,
 from circ.visualization import LABEL_COLORS
 # {'constitutive': '#4878CF', 'rhythmic': '#6ACC65', 'linear': '#D65F5F',
 #  'variable': '#B47CC7', 'noisy_rhythmic': '#C4AD66', 'unclassified': '#8C8C8C'}
+```
+
+## `circ.visualization.interactive` — Interactive (Plotly) plots
+
+The `interactive` sub-module provides Plotly equivalents of all static plots.
+Functions return `plotly.graph_objects.Figure` objects that can be displayed
+in Jupyter notebooks or saved with `fig.write_html()`.  The key advantage over
+the static versions is that scatter plots carry gene IDs in hover tooltips,
+making it easy to identify specific genes of interest.
+
+Requires plotly, available as an optional dependency:
+
+```bash
+poetry install --extras interactive
+```
+
+```python
+import circ.visualization.interactive as iviz
+
+# All static plots have an interactive counterpart
+fig = iviz.label_distribution(result)
+fig = iviz.pirs_vs_tau(result)          # hover shows gene ID + scores
+fig = iviz.volcano(result)              # hover shows gene ID + p-value
+fig = iviz.pirs_score_distribution(result)
+fig = iviz.tau_pval_scatter(result)
+fig = iviz.phase_wheel(result)          # interactive polar bar chart
+fig = iviz.period_distribution(result)
+fig = iviz.classification_summary(result)   # adaptive multi-panel
+
+# Benchmark plots with threshold hover
+fig = iviz.classification_pr(result, true_classes)
+fig = iviz.classification_roc(result, true_classes)
+
+# Save to HTML for sharing
+fig.write_html("results.html")
 ```
