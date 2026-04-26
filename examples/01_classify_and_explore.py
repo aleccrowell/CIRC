@@ -95,7 +95,7 @@ print(f"  saved → {out}")
 # ---------------------------------------------------------------------------
 print("Group 2: Rhythmicity …")
 
-fig = plt.figure(figsize=(20, 4))
+fig = plt.figure(figsize=(20, 5))
 ax0 = fig.add_subplot(1, 4, 1)
 ax1 = fig.add_subplot(1, 4, 2, projection="polar")
 ax2 = fig.add_subplot(1, 4, 3)

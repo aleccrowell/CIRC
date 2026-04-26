@@ -93,9 +93,14 @@ print(result_B["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 print("Section 1: Label distribution comparison …")
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 4), sharey=False)
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
 viz.label_distribution(result_A, ax=axes[0], title=COND_LABELS[0])
 viz.label_distribution(result_B, ax=axes[1], title=COND_LABELS[1])
+
+# Shared x-axis range so gene counts are visually comparable across conditions
+xmax = max(axes[0].get_xlim()[1], axes[1].get_xlim()[1])
+axes[0].set_xlim(0, xmax)
+axes[1].set_xlim(0, xmax)
 
 plt.tight_layout()
 out = FIGURES / "20_label_comparison.png"
@@ -112,7 +117,7 @@ print(f"  saved → {out}")
 # ---------------------------------------------------------------------------
 print("Section 2: Phase wheel comparison …")
 
-fig = plt.figure(figsize=(10, 4))
+fig = plt.figure(figsize=(10, 5))
 ax_A = fig.add_subplot(1, 2, 1, projection="polar")
 ax_B = fig.add_subplot(1, 2, 2, projection="polar")
 
@@ -146,7 +151,7 @@ print(f"  Constitutive in both   : {len(both)}")
 print(f"  Constitutive in B only : {len(only_B)}\n")
 
 # Side-by-side top_constitutive_candidates; highlight shared genes
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 viz.top_constitutive_candidates(result_A, n_top=15, ax=axes[0],
                                 title=f"Top candidates — {COND_LABELS[0]}")
 viz.top_constitutive_candidates(result_B, n_top=15, ax=axes[1],
@@ -167,7 +172,7 @@ if shared_top:
 shared_patch = mpatches.Patch(color="#2E8B57",
                               label=f"In both top-15 ({len(shared_top)} genes)")
 fig.legend(handles=[shared_patch], loc="lower center", ncol=1,
-           frameon=False, fontsize=8, bbox_to_anchor=(0.5, -0.04))
+           frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
 plt.tight_layout()
 out = FIGURES / "22_constitutive_overlap.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -221,7 +226,7 @@ ax.set_ylim(0, lim)
 ax.set_xlabel(f"TauMean — {COND_LABELS[0]}")
 ax.set_ylabel(f"TauMean — {COND_LABELS[1]}")
 ax.set_title("Rhythmicity shift: TauMean per condition")
-ax.legend(loc="upper left", frameon=False, fontsize=7, markerscale=1.5)
+ax.legend(loc="upper left", frameon=False, fontsize=8, markerscale=1.5)
 sns.despine(ax=ax)
 
 plt.tight_layout()

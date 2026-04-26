@@ -55,7 +55,7 @@ def _label_legend(present, ax):
         for l in _LABEL_ORDER if l in present
     ]
     if patches:
-        ax.legend(handles=patches, loc='best', frameon=False, fontsize=8)
+        ax.legend(handles=patches, loc='best', frameon=False, fontsize=9)
 
 
 def _clip_axes_to_data(ax, x_series, y_series, x_pct=(1, 99), y_pct=(0, 99)):
@@ -101,7 +101,7 @@ def label_distribution(classifications, ax=None, title='Expression label counts'
     )
     colors = [LABEL_COLORS[l] for l in counts.index]
     bars = ax.barh(counts.index, counts.values, color=colors)
-    ax.bar_label(bars, fmt='%d', padding=3, fontsize=8)
+    ax.bar_label(bars, fmt='%d', padding=3, fontsize=9)
     ax.set_xlabel('Gene count')
     ax.set_title(title)
     ax.invert_yaxis()
@@ -146,6 +146,9 @@ def pirs_vs_tau(
                label=f'PIRS p{int(pirs_percentile)}')
     ax.axhline(tau_threshold, color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'τ = {tau_threshold}')
+    # Clip x to 95th percentile to match pirs_score_distribution and avoid
+    # high-PIRS outliers compressing the constitutive cluster at the left edge
+    _clip_axes_to_data(ax, df['pirs_score'], df['tau_mean'], x_pct=(0, 95))
     ax.set_xlabel('PIRS score')
     ax.set_ylabel('TauMean')
     ax.set_title(title)
@@ -238,14 +241,15 @@ def pirs_score_distribution(
                         alpha=0.3, linewidth=1.2)
     ax.axvline(pirs_cut, color='#333333', ls='--', lw=0.9, alpha=0.8,
                label=f'p{int(pirs_percentile)} cut')
-    # Clip x-axis to 1st–99th percentile to avoid outlier compression
-    lo, hi = np.percentile(all_scores, [1, 99])
-    margin = max((hi - lo) * 0.1, 0.05)
-    ax.set_xlim(lo - margin, hi + margin)
+    # Clip x-axis: always start at 0 and end at the 95th percentile so the
+    # constitutive spike and the label separation are both visible.
+    hi = np.percentile(all_scores, 95)
+    margin = max(hi * 0.05, 0.05)
+    ax.set_xlim(0, hi + margin)
     ax.set_xlabel('PIRS score')
     ax.set_ylabel('Density')
     ax.set_title(title)
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=9)
     sns.despine(ax=ax)
     return ax
 
@@ -289,7 +293,8 @@ def tau_pval_scatter(
                label=f'τ = {tau_threshold}')
     ax.axhline(-np.log10(emp_p_threshold), color='#333333', ls=':', lw=0.9, alpha=0.7,
                label=f'FDR = {emp_p_threshold}')
-    _clip_axes_to_data(ax, df['tau_mean'], df['neg_log_emp_p'])
+    # Always start tau from 0 so the threshold line is never at the left edge
+    _clip_axes_to_data(ax, df['tau_mean'], df['neg_log_emp_p'], x_pct=(0, 99))
     ax.set_xlabel('TauMean')
     ax.set_ylabel('−log₁₀(GammaBH)')
     ax.set_title(title)
@@ -519,17 +524,17 @@ def phase_wheel(
     ax.set_theta_direction(-1)
     ax.set_xticks(np.linspace(0, 2 * np.pi, 8, endpoint=False))
     hour_labels = [f'ZT{int(h):02d}' for h in np.linspace(0, 24, 8, endpoint=False)]
-    ax.set_xticklabels(hour_labels, fontsize=8)
+    ax.set_xticklabels(hour_labels, fontsize=9)
 
     # Show integer counts on the radial axis and label each bar
     max_count = max(counts) if counts.max() > 0 else 1
-    ax.set_rmax(max_count * 1.25)
+    ax.set_rmax(max_count * 1.30)
     ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True, nbins=4))
-    ax.tick_params(axis='y', labelsize=7, labelcolor='#555555')
+    ax.tick_params(axis='y', labelsize=8, labelcolor='#555555')
     for angle, count in zip(bins[:-1] + widths / 2, counts):
         if count > 0:
-            ax.text(angle, count + max_count * 0.07, str(count),
-                    ha='center', va='bottom', fontsize=7, color='#333333')
+            ax.text(angle, count + max_count * 0.10, str(count),
+                    ha='center', va='bottom', fontsize=8, color='#333333')
 
     ax.set_title(title, pad=15)
     return ax
@@ -602,7 +607,7 @@ def period_distribution(
     ax.set_xlabel('Period (h)')
     ax.set_ylabel('Gene count')
     ax.set_title(title)
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=9)
     sns.despine(ax=ax)
     return ax
 
@@ -647,6 +652,12 @@ def phase_amplitude_scatter(
         title = title + ' (all genes — no rhythmic genes at current thresholds)'
 
     _scatter_by_label(df, 'phase_mean', 'tau_mean', ax, size=20, alpha=0.7)
+
+    # Ensure the y-axis shows a minimum readable range even with few genes
+    y_lo, y_hi = ax.get_ylim()
+    if y_hi - y_lo < 0.15:
+        mid = (y_lo + y_hi) / 2
+        ax.set_ylim(max(0.0, mid - 0.075), min(1.15, mid + 0.075))
 
     ax.set_xlabel('Phase (h)')
     ax.set_xlim(0, 24)
@@ -744,7 +755,7 @@ def top_constitutive_candidates(
         if lbl != 'constitutive' and LABEL_COLORS.get(lbl) in color_set:
             legend_patches.append(mpatches.Patch(color=LABEL_COLORS[lbl], label=lbl))
     if legend_patches:
-        ax.legend(handles=legend_patches, loc='lower right', frameon=False, fontsize=7)
+        ax.legend(handles=legend_patches, loc='lower right', frameon=False, fontsize=8)
 
     sns.despine(ax=ax, left=True)
     return ax
@@ -846,7 +857,7 @@ def classification_summary(
             ax = fig.add_subplot(nrows, ncols, i)
             fn(ax)
 
-    fig.tight_layout()
+    fig.tight_layout(pad=1.5, h_pad=2.0, w_pad=1.5)
     if outpath:
         fig.savefig(outpath, dpi=150, bbox_inches='tight')
     return fig
@@ -934,7 +945,7 @@ def mean_expression_profiles(
     ax.set_xlabel('Zeitgeber time (h)')
     ax.set_ylabel('Mean z-scored expression ± SEM')
     ax.set_title(title)
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=9)
     sns.despine(ax=ax)
     return ax
 
@@ -988,6 +999,6 @@ def threshold_sensitivity(
     ax.set_xlabel('PIRS score')
     ax.set_ylabel('Cumulative fraction')
     ax.set_title(title)
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=9)
     sns.despine(ax=ax)
     return ax

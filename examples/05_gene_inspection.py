@@ -138,7 +138,8 @@ for idx, gene_id in enumerate(top_rhythmic.index):
     ax   = fig.add_subplot(gs_gallery[r, c])
     _gene_profile(ax, gene_id, color)
 
-fig.suptitle("Top rhythmic genes — individual profiles (τ ranked)", y=1.01, fontsize=11)
+fig.suptitle("Top rhythmic genes — individual profiles (τ ranked)", fontsize=11)
+fig.tight_layout(rect=[0, 0, 1, 0.95])
 out = FIGURES / "15_rhythmic_profiles.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -170,7 +171,8 @@ for idx, gene_id in enumerate(top_constitutive.index):
     _gene_profile(ax, gene_id, color)
 
 fig.suptitle("Top constitutive gene candidates — individual profiles (PIRS ranked)",
-             y=1.01, fontsize=11)
+             fontsize=11)
+fig.tight_layout(rect=[0, 0, 1, 0.95])
 out = FIGURES / "16_constitutive_profiles.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
