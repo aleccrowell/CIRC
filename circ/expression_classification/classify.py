@@ -233,6 +233,9 @@ class Classifier:
             * ``emp_p`` – FDR-corrected p-value (``GammaBH``), if available
             * ``period_mean`` – estimated period, if available
             * ``phase_mean`` – estimated phase, if available
+            * ``tau_std`` – bootstrap standard deviation of TauMean
+            * ``phase_std`` – circular SD of phase estimate (hours)
+            * ``n_boots`` – number of BooteJTK bootstrap iterations
             * ``label`` – one of ``constitutive``, ``rhythmic``, ``linear``,
               ``variable``, ``noisy_rhythmic``
         """
@@ -256,9 +259,12 @@ class Classifier:
         result['tau_mean'] = self.rhythm_results[tau_col]
 
         for src_col, dst_col in [
-            ('GammaBH', 'emp_p'),
-            ('PeriodMean', 'period_mean'),
-            ('PhaseMean', 'phase_mean'),
+            ('GammaBH',     'emp_p'),
+            ('PeriodMean',  'period_mean'),
+            ('PhaseMean',   'phase_mean'),
+            ('TauStdDev',   'tau_std'),
+            ('PhaseStdDev', 'phase_std'),
+            ('NumBoots',    'n_boots'),
         ]:
             if src_col in self.rhythm_results.columns:
                 result[dst_col] = self.rhythm_results[src_col]
