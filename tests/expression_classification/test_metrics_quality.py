@@ -16,6 +16,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 
 from circ.simulations import simulate
 from circ.expression_classification.classify import Classifier
+from circ.pirs.rank import ranker, rsd_ranker
 
 
 # ---------------------------------------------------------------------------
@@ -348,3 +349,74 @@ class TestLabelAccuracy:
             f"Expected at least 1 truly circadian gene labelled rhythmic/noisy_rhythmic "
             f"on clean data; got 0 out of {len(circ_ids)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# PIRS noise discrimination: flat high-noise vs flat low-noise constitutive
+# ---------------------------------------------------------------------------
+
+class TestPirsNoiseDiscrimination:
+    """PIRS score discriminates flat high-noise from flat low-noise constitutive genes.
+
+    Both gene types are constitutive (no slope, no rhythm), but PIRS must
+    assign higher scores to high-noise genes because wider prediction intervals
+    deviate further from mean expression.  Neither gene should be flagged as
+    non-constitutive or trending by the permutation tests.
+    """
+
+    @pytest.fixture(scope="class")
+    def flat_noise_ranker(self, tmp_path_factory):
+        """One low-noise (σ=0.1) and one high-noise (σ=2.0) flat gene."""
+        tmp = tmp_path_factory.mktemp("flat_noise")
+        rng = np.random.default_rng(42)
+        tpoints = [2, 4, 6, 8, 10, 12]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        flat_low  = rng.normal(5.0, 0.1, len(cols))
+        flat_high = rng.normal(5.0, 2.0, len(cols))
+        df = pd.DataFrame({"flat_low": flat_low, "flat_high": flat_high}, index=cols).T
+        df.index.name = "#"
+        path = str(tmp / "flat_noise.txt")
+        df.to_csv(path, sep="\t")
+        r = ranker(path, anova=False)
+        r.get_tpoints()
+        r.calculate_scores()
+        return r
+
+    def test_high_noise_scores_higher(self, flat_noise_ranker):
+        """Wider prediction intervals from more noise → larger PIRS score."""
+        scores = flat_noise_ranker.errors
+        assert scores.loc["flat_high", "score"] > scores.loc["flat_low", "score"]
+
+    def test_low_noise_ranked_ahead_of_high_noise(self, flat_noise_ranker):
+        """Low-noise gene sorts before high-noise gene (better constitutive marker)."""
+        ranked = list(flat_noise_ranker.errors.index)
+        assert ranked.index("flat_low") < ranked.index("flat_high")
+
+    def test_neither_gene_flagged_as_nonconstit(self, flat_noise_ranker):
+        """Both flat genes should have high PIRS p-values regardless of noise level."""
+        result = flat_noise_ranker.calculate_pvals(n_permutations=199)
+        assert result.loc["flat_low",  "pval"] > 0.1
+        assert result.loc["flat_high", "pval"] > 0.1
+
+    def test_neither_gene_has_significant_slope(self, flat_noise_ranker):
+        """Neither flat gene should be detected as significantly trending."""
+        result = flat_noise_ranker.calculate_slope_pvals(n_permutations=199)
+        assert result.loc["flat_low",  "slope_pval"] > 0.1
+        assert result.loc["flat_high", "slope_pval"] > 0.1
+
+    def test_rsd_also_distinguishes_noise_levels(self, tmp_path_factory):
+        """rsd_ranker independently confirms the noise-level ranking."""
+        tmp = tmp_path_factory.mktemp("flat_noise_rsd")
+        rng = np.random.default_rng(42)
+        tpoints = [2, 4, 6, 8, 10, 12]
+        n_reps = 3
+        cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
+        flat_low  = rng.normal(5.0, 0.1, len(cols))
+        flat_high = rng.normal(5.0, 2.0, len(cols))
+        df = pd.DataFrame({"flat_low": flat_low, "flat_high": flat_high}, index=cols).T
+        df.index.name = "#"
+        path = str(tmp / "flat_noise_rsd.txt")
+        df.to_csv(path, sep="\t")
+        scores = rsd_ranker(path).calculate_scores()
+        assert scores.loc["flat_low", "score"] < scores.loc["flat_high", "score"]
