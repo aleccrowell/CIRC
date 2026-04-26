@@ -607,6 +607,149 @@ def period_distribution(
     return ax
 
 
+def phase_amplitude_scatter(
+    classifications,
+    labels=('rhythmic', 'noisy_rhythmic'),
+    ax=None,
+    title='Phase vs rhythm strength (rhythmic genes)',
+):
+    """Scatter of estimated phase angle vs rhythm strength for rhythmic genes.
+
+    Phase (x-axis) is the estimated peak time in hours (0–24).  Rhythm
+    strength (y-axis) is TauMean, the Kendall's tau correlation between the
+    data and a cosine waveform — higher values indicate a stronger rhythmic
+    signal.
+
+    Requires ``phase_mean`` and ``tau_mean`` columns (present when
+    ``run_bootjtk()`` has been called).
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    labels : tuple of str
+        Labels to include (default: rhythmic and noisy_rhythmic).
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    if not _has(classifications, 'phase_mean'):
+        raise ValueError("'phase_mean' column is required. Call run_bootjtk() first.")
+
+    ax = _ax(ax)
+    df = classifications[classifications['label'].isin(labels)].dropna(
+        subset=['phase_mean', 'tau_mean']
+    )
+    if df.empty:
+        df = classifications.dropna(subset=['phase_mean', 'tau_mean'])
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
+
+    _scatter_by_label(df, 'phase_mean', 'tau_mean', ax, size=20, alpha=0.7)
+
+    ax.set_xlabel('Phase (h)')
+    ax.set_xlim(0, 24)
+    ax.set_xticks(range(0, 25, 4))
+    ax.set_xticklabels([f'ZT{h:02d}' for h in range(0, 25, 4)])
+    ax.set_ylabel('Rhythm strength (TauMean)')
+    ax.set_title(title)
+    _label_legend(df['label'].unique(), ax)
+    sns.despine(ax=ax)
+    return ax
+
+
+def top_constitutive_candidates(
+    classifications,
+    n_top=20,
+    pirs_percentile=50,
+    ax=None,
+    title='Top constitutive gene candidates',
+):
+    """Ranked horizontal bar chart of the top-scoring constitutive gene candidates.
+
+    Genes are ranked by PIRS score ascending (lower = more constitutive).
+    When p-value columns are present, bar colours communicate evidence strength:
+
+    * **Strong candidate** (``LABEL_COLORS['constitutive']``): constitutive
+      label, significant PIRS p-value, and no significant linear slope.
+    * **Moderate candidate** (lighter blue): significant PIRS p-value but a
+      significant linear slope detected.
+    * **Weak candidate** (pale blue): constitutive label but p-value not yet
+      significant.
+    * **Other labels** (their ``LABEL_COLORS``): genes with a low PIRS score
+      that were classified differently (e.g. rhythmic).
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+        Output of ``Classifier.classify()``.
+    n_top : int
+        Number of top candidates to display (default 20).
+    pirs_percentile : float
+        Percentile cutoff drawn as a vertical reference line (default 50).
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    ax = _ax(ax)
+    df = classifications.dropna(subset=['pirs_score'])
+    top = df.nsmallest(n_top, 'pirs_score')
+
+    all_scores = classifications['pirs_score'].dropna()
+    pirs_cut = np.percentile(all_scores, pirs_percentile)
+
+    p_col  = ('pval_bh'      if _has(df, 'pval_bh')      else
+              'pval'          if _has(df, 'pval')          else None)
+    sp_col = ('slope_pval_bh' if _has(df, 'slope_pval_bh') else
+              'slope_pval'    if _has(df, 'slope_pval')    else None)
+
+    def _bar_color(row):
+        lbl = row['label'] if 'label' in row.index else 'constitutive'
+        if lbl != 'constitutive':
+            return LABEL_COLORS.get(lbl, '#8C8C8C')
+        if p_col is None:
+            return LABEL_COLORS['constitutive']
+        pval_sig  = pd.notna(row[p_col])  and row[p_col]  <= 0.05
+        slope_ns  = sp_col is None or (pd.notna(row[sp_col]) and row[sp_col] > 0.05)
+        if pval_sig and slope_ns:
+            return LABEL_COLORS['constitutive']
+        if pval_sig:
+            return '#7BA7D4'
+        return '#B0C4DE'
+
+    colors    = [_bar_color(row) for _, row in top.iterrows()]
+    top_rev   = top.iloc[::-1]
+    colors_rev = colors[::-1]
+
+    ax.barh(top_rev.index.tolist(), top_rev['pirs_score'].values, color=colors_rev)
+    ax.axvline(pirs_cut, color='#333333', ls='--', lw=0.9, alpha=0.7,
+               label=f'PIRS p{int(pirs_percentile)}')
+    ax.set_xlabel('PIRS score')
+    ax.set_title(title)
+
+    color_set = set(colors)
+    legend_patches = []
+    base_lbl = 'constitutive' if p_col is None else 'strong candidate'
+    if LABEL_COLORS['constitutive'] in color_set:
+        legend_patches.append(mpatches.Patch(color=LABEL_COLORS['constitutive'], label=base_lbl))
+    if '#7BA7D4' in color_set:
+        legend_patches.append(mpatches.Patch(color='#7BA7D4', label='has linear slope'))
+    if '#B0C4DE' in color_set:
+        legend_patches.append(mpatches.Patch(color='#B0C4DE', label='not yet significant'))
+    for lbl in _LABEL_ORDER:
+        if lbl != 'constitutive' and LABEL_COLORS.get(lbl) in color_set:
+            legend_patches.append(mpatches.Patch(color=LABEL_COLORS[lbl], label=lbl))
+    if legend_patches:
+        ax.legend(handles=legend_patches, loc='lower right', frameon=False, fontsize=7)
+
+    sns.despine(ax=ax, left=True)
+    return ax
+
+
 def classification_summary(
     classifications,
     pirs_percentile=50,
@@ -662,6 +805,8 @@ def classification_summary(
             tau_threshold=tau_threshold, ax=ax)),
         ('pirs_score_distribution', lambda ax: pirs_score_distribution(
             classifications, pirs_percentile=pirs_percentile, ax=ax)),
+        ('top_constitutive_candidates', lambda ax: top_constitutive_candidates(
+            classifications, pirs_percentile=pirs_percentile, ax=ax)),
     ]
     if has_emp_p:
         panels += [
@@ -681,6 +826,8 @@ def classification_summary(
             emp_p_threshold=emp_p_threshold, ax=ax)))
     if has_phase:
         panels.append(('phase_wheel', None))  # handled separately — polar axes
+        panels.append(('phase_amplitude_scatter', lambda ax: phase_amplitude_scatter(
+            classifications, ax=ax)))
     if has_period:
         panels.append(('period_distribution', lambda ax: period_distribution(
             classifications, ax=ax)))
@@ -703,3 +850,144 @@ def classification_summary(
     if outpath:
         fig.savefig(outpath, dpi=150, bbox_inches='tight')
     return fig
+
+
+def mean_expression_profiles(
+    expression,
+    classifications,
+    labels=None,
+    ax=None,
+    title='Mean expression profile by label',
+):
+    """Mean ± SEM time-series expression profile for each expression label.
+
+    Genes are grouped by their ``label`` from *classifications*, z-scored
+    individually so that all genes contribute equally regardless of baseline
+    level, and then averaged per label at each unique timepoint.  The shaded
+    band shows ± 1 SEM across genes.
+
+    Parameters
+    ----------
+    expression : pd.DataFrame
+        Expression data with ZT/CT-prefixed sample columns (e.g. ``ZT02_1``),
+        indexed by gene ID.
+    classifications : pd.DataFrame
+        Output of ``Classifier.classify()``, indexed by the same gene IDs.
+    labels : list of str, optional
+        Labels to include.  Defaults to all labels present in *classifications*.
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    ax = _ax(ax)
+
+    zt_cols = [c for c in expression.columns
+               if c.startswith('ZT') or c.startswith('CT')]
+    if not zt_cols:
+        raise ValueError("No ZT/CT columns found in expression DataFrame.")
+
+    def _parse_zt(col):
+        return int(col.replace('ZT', '').replace('CT', '').split('_')[0])
+
+    timepoints = np.array([_parse_zt(c) for c in zt_cols])
+    unique_tp  = np.sort(np.unique(timepoints))
+
+    # Average replicates → one value per gene per unique timepoint
+    tp_means = pd.DataFrame(
+        {int(tp): expression[
+            [c for c, t in zip(zt_cols, timepoints) if t == tp]
+        ].mean(axis=1)
+         for tp in unique_tp},
+        index=expression.index,
+    )
+
+    # Z-score each gene across its timepoint means so profiles are comparable
+    row_mean = tp_means.mean(axis=1)
+    row_std  = tp_means.std(axis=1).replace(0, np.nan)
+    tp_z     = tp_means.sub(row_mean, axis=0).div(row_std, axis=0)
+
+    common = tp_z.index.intersection(classifications.index)
+    tp_z   = tp_z.loc[common]
+    clf    = classifications.loc[common]
+
+    if labels is None:
+        labels = [l for l in _LABEL_ORDER if l in clf['label'].values]
+
+    for lbl in labels:
+        genes = clf[clf['label'] == lbl].index
+        if len(genes) == 0:
+            continue
+        profiles = tp_z.loc[genes].astype(float)
+        mean_p   = profiles.mean(axis=0)
+        sem_p    = profiles.sem(axis=0)
+        color    = LABEL_COLORS.get(lbl, '#8C8C8C')
+        ax.plot(unique_tp, mean_p.values, color=color, label=lbl, lw=1.5)
+        ax.fill_between(unique_tp,
+                        (mean_p - sem_p).values,
+                        (mean_p + sem_p).values,
+                        color=color, alpha=0.15)
+
+    ax.axhline(0, color='#999999', ls=':', lw=0.8)
+    ax.set_xlabel('Zeitgeber time (h)')
+    ax.set_ylabel('Mean z-scored expression ± SEM')
+    ax.set_title(title)
+    ax.legend(frameon=False, fontsize=8)
+    sns.despine(ax=ax)
+    return ax
+
+
+def threshold_sensitivity(
+    classifications,
+    pirs_percentile=50,
+    ax=None,
+    title='PIRS score distribution by label (ECDF)',
+):
+    """Empirical CDFs of PIRS scores per expression label.
+
+    Shows how each label's genes distribute across the PIRS score range so
+    you can evaluate where the constitutive cutoff sits relative to each
+    population.  A vertical dashed line marks the current *pirs_percentile*
+    threshold.  Ideal separation: the constitutive curve rises steeply to
+    the left of the cut while other labels rise slowly or not at all there.
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    pirs_percentile : float
+        Current threshold to mark with a vertical line (default 50).
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    ax = _ax(ax)
+    all_scores = classifications['pirs_score'].dropna()
+    pirs_cut   = np.percentile(all_scores, pirs_percentile)
+
+    for lbl in _LABEL_ORDER:
+        sub = classifications[classifications['label'] == lbl]['pirs_score'].dropna()
+        if sub.empty:
+            continue
+        sorted_scores = np.sort(sub)
+        ecdf = np.arange(1, len(sorted_scores) + 1) / len(sorted_scores)
+        ax.step(sorted_scores, ecdf,
+                color=LABEL_COLORS[lbl], label=lbl, lw=1.5, where='post')
+
+    ax.axvline(pirs_cut, color='#333333', ls='--', lw=0.9, alpha=0.8,
+               label=f'p{int(pirs_percentile)} cut')
+
+    lo, hi = np.percentile(all_scores, [1, 99])
+    margin = max((hi - lo) * 0.05, 0.05)
+    ax.set_xlim(lo - margin, hi + margin)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel('PIRS score')
+    ax.set_ylabel('Cumulative fraction')
+    ax.set_title(title)
+    ax.legend(frameon=False, fontsize=8)
+    sns.despine(ax=ax)
+    return ax

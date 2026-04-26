@@ -39,6 +39,10 @@ from circ.visualization.classify import (
     slope_vs_rhythm,
     phase_wheel,
     period_distribution,
+    phase_amplitude_scatter,
+    top_constitutive_candidates,
+    mean_expression_profiles,
+    threshold_sensitivity,
     classification_summary,
 )
 from circ.evaluation import roc_auc
@@ -62,6 +66,10 @@ __all__ = [
     'slope_vs_rhythm',
     'phase_wheel',
     'period_distribution',
+    'phase_amplitude_scatter',
+    'top_constitutive_candidates',
+    'mean_expression_profiles',
+    'threshold_sensitivity',
     'classification_summary',
     # benchmarks
     'pr_curve',

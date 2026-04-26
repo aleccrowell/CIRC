@@ -345,6 +345,285 @@ def period_distribution(
     return fig
 
 
+def phase_amplitude_scatter(
+    classifications,
+    labels=('rhythmic', 'noisy_rhythmic'),
+    title='Phase vs rhythm strength (rhythmic genes)',
+):
+    """Interactive scatter of estimated phase angle vs rhythm strength.
+
+    Hover over any point to see the gene ID, phase, TauMean, and label.
+
+    Requires ``phase_mean`` and ``tau_mean`` columns.
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    labels : tuple of str
+        Labels to include (default: rhythmic and noisy_rhythmic).
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    if not _has(classifications, 'phase_mean'):
+        raise ValueError("'phase_mean' column is required. Call run_bootjtk() first.")
+
+    df = classifications[classifications['label'].isin(labels)].dropna(
+        subset=['phase_mean', 'tau_mean']
+    )
+    if df.empty:
+        df = classifications.dropna(subset=['phase_mean', 'tau_mean'])
+        title = title + ' (all genes — no rhythmic genes at current thresholds)'
+
+    traces = []
+    for lbl in _LABEL_ORDER:
+        sub = df[df['label'] == lbl] if 'label' in df.columns else df
+        if sub.empty:
+            continue
+        traces.append(go.Scatter(
+            x=sub['phase_mean'], y=sub['tau_mean'],
+            mode='markers',
+            name=lbl,
+            text=sub.index.tolist(),
+            hovertemplate=(
+                '<b>%{text}</b><br>'
+                'phase: %{x:.2f} h<br>'
+                'TauMean: %{y:.4g}<br>'
+                f'label: {lbl}'
+                '<extra></extra>'
+            ),
+            marker=dict(color=LABEL_COLORS.get(lbl, '#8C8C8C'), size=5, opacity=0.7),
+        ))
+
+    zt_vals  = list(range(0, 25, 4))
+    zt_texts = [f'ZT{h:02d}' for h in zt_vals]
+    fig = go.Figure(traces)
+    fig.update_layout(
+        title=title,
+        xaxis=dict(title='Phase (h)', range=[0, 24],
+                   tickmode='array', tickvals=zt_vals, ticktext=zt_texts),
+        yaxis_title='Rhythm strength (TauMean)',
+        legend_title='Label',
+    )
+    return fig
+
+
+def top_constitutive_candidates(
+    classifications,
+    n_top=20,
+    pirs_percentile=50,
+    title='Top constitutive gene candidates',
+):
+    """Interactive ranked horizontal bar chart of the top constitutive gene candidates.
+
+    Genes are ranked by PIRS score ascending (lower = more constitutive).
+    Hover over any bar to see PIRS score, p-values, and the assigned label.
+    Bar colours communicate evidence strength — see the static version for
+    full tier documentation.
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+        Output of ``Classifier.classify()``.
+    n_top : int
+        Number of top candidates to display (default 20).
+    pirs_percentile : float
+        Percentile cutoff drawn as a vertical reference line (default 50).
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    from circ.visualization.classify import LABEL_COLORS as _LC
+    import pandas as _pd
+
+    df  = classifications.dropna(subset=['pirs_score'])
+    top = df.nsmallest(n_top, 'pirs_score')
+
+    all_scores = classifications['pirs_score'].dropna()
+    pirs_cut   = float(np.percentile(all_scores, pirs_percentile))
+
+    p_col  = ('pval_bh'      if _has(df, 'pval_bh')      else
+              'pval'          if _has(df, 'pval')          else None)
+    sp_col = ('slope_pval_bh' if _has(df, 'slope_pval_bh') else
+              'slope_pval'    if _has(df, 'slope_pval')    else None)
+
+    def _bar_color(row):
+        lbl = row['label'] if 'label' in row.index else 'constitutive'
+        if lbl != 'constitutive':
+            return _LC.get(lbl, '#8C8C8C')
+        if p_col is None:
+            return _LC['constitutive']
+        pval_sig = _pd.notna(row[p_col]) and row[p_col] <= 0.05
+        slope_ns = sp_col is None or (_pd.notna(row[sp_col]) and row[sp_col] > 0.05)
+        if pval_sig and slope_ns:
+            return _LC['constitutive']
+        if pval_sig:
+            return '#7BA7D4'
+        return '#B0C4DE'
+
+    hover_texts = []
+    for gene_id, row in top.iterrows():
+        txt = f'<b>{gene_id}</b><br>PIRS score: {row["pirs_score"]:.4g}'
+        if p_col and _pd.notna(row.get(p_col, float('nan'))):
+            txt += f'<br>{p_col}: {row[p_col]:.3g}'
+        if sp_col and _pd.notna(row.get(sp_col, float('nan'))):
+            txt += f'<br>{sp_col}: {row[sp_col]:.3g}'
+        if 'label' in row.index:
+            txt += f'<br>label: {row["label"]}'
+        hover_texts.append(txt)
+
+    colors    = [_bar_color(row) for _, row in top.iterrows()]
+    top_rev   = top.iloc[::-1]
+    colors_rev = colors[::-1]
+    hover_rev  = hover_texts[::-1]
+
+    fig = go.Figure(go.Bar(
+        x=top_rev['pirs_score'].values,
+        y=top_rev.index.tolist(),
+        orientation='h',
+        marker_color=colors_rev,
+        hovertext=hover_rev,
+        hovertemplate='%{hovertext}<extra></extra>',
+    ))
+    fig.add_vline(x=pirs_cut, line_dash='dash', line_color='#333333', opacity=0.7,
+                  annotation_text=f'PIRS p{int(pirs_percentile)}',
+                  annotation_position='top right')
+    fig.update_layout(
+        title=title,
+        xaxis_title='PIRS score',
+        showlegend=False,
+    )
+    return fig
+
+
+def pirs_pval_scatter(
+    classifications,
+    pval_threshold=0.05,
+    title='PIRS score vs temporal structure significance',
+):
+    """Interactive scatter of PIRS score vs −log₁₀(pval_bh).
+
+    Requires ``pval`` column (from ``run_pirs(pvals=True)``).
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    pval_threshold : float
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    p_col = 'pval_bh' if _has(classifications, 'pval_bh') else 'pval'
+    if not _has(classifications, p_col):
+        raise ValueError("'pval' column is required. Call run_pirs(pvals=True) first.")
+    df = classifications.dropna(subset=['pirs_score', p_col])
+    df = df.assign(neg_log_p=_safe_neglog10(df[p_col]))
+
+    fig = go.Figure(_scatter_traces(df, 'pirs_score', 'neg_log_p'))
+    fig.add_hline(y=-np.log10(pval_threshold), line_dash='dash', line_color='#333333', opacity=0.7,
+                  annotation_text=f'α={pval_threshold}', annotation_position='bottom right')
+    lbl = 'pval_bh' if p_col == 'pval_bh' else 'pval'
+    fig.update_layout(title=title, xaxis_title='PIRS score',
+                      yaxis_title=f'−log₁₀({lbl})', legend_title='Label')
+    return fig
+
+
+def slope_pval_scatter(
+    classifications,
+    slope_pval_threshold=0.05,
+    pirs_percentile=50,
+    title='PIRS score vs linear slope significance',
+):
+    """Interactive scatter of PIRS score vs −log₁₀(slope_pval_bh).
+
+    Requires ``slope_pval`` column (from ``run_pirs(slope_pvals=True)``).
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    slope_pval_threshold : float
+    pirs_percentile : float
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    sp_col = 'slope_pval_bh' if _has(classifications, 'slope_pval_bh') else 'slope_pval'
+    if not _has(classifications, sp_col):
+        raise ValueError(
+            "'slope_pval' column is required. Call run_pirs(slope_pvals=True) first."
+        )
+    df = classifications.dropna(subset=['pirs_score', sp_col])
+    df = df.assign(neg_log_slope=_safe_neglog10(df[sp_col]))
+    pirs_cut = float(np.percentile(df['pirs_score'], pirs_percentile))
+
+    fig = go.Figure(_scatter_traces(df, 'pirs_score', 'neg_log_slope'))
+    fig.add_hline(y=-np.log10(slope_pval_threshold), line_dash='dash', line_color='#333333',
+                  opacity=0.7, annotation_text=f'α={slope_pval_threshold}',
+                  annotation_position='bottom right')
+    fig.add_vline(x=pirs_cut, line_dash='dot', line_color='#333333', opacity=0.7,
+                  annotation_text=f'PIRS p{int(pirs_percentile)}',
+                  annotation_position='top right')
+    lbl = 'slope_pval_bh' if sp_col == 'slope_pval_bh' else 'slope_pval'
+    fig.update_layout(title=title, xaxis_title='PIRS score',
+                      yaxis_title=f'−log₁₀({lbl})', legend_title='Label')
+    return fig
+
+
+def slope_vs_rhythm(
+    classifications,
+    slope_pval_threshold=0.05,
+    emp_p_threshold=0.05,
+    title='Slope significance vs rhythmicity significance',
+):
+    """Interactive scatter of −log₁₀(slope_pval_bh) vs −log₁₀(emp_p).
+
+    Requires ``slope_pval`` and ``emp_p`` columns.
+
+    Parameters
+    ----------
+    classifications : pd.DataFrame
+    slope_pval_threshold : float
+    emp_p_threshold : float
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    sp_col = 'slope_pval_bh' if _has(classifications, 'slope_pval_bh') else 'slope_pval'
+    if not _has(classifications, sp_col):
+        raise ValueError(
+            "'slope_pval' column is required. Call run_pirs(slope_pvals=True) first."
+        )
+    if not _has(classifications, 'emp_p'):
+        raise ValueError("'emp_p' column is required. Call run_bootjtk() first.")
+    df = classifications.dropna(subset=[sp_col, 'emp_p'])
+    df = df.assign(
+        neg_log_slope=_safe_neglog10(df[sp_col]),
+        neg_log_emp_p=_safe_neglog10(df['emp_p']),
+    )
+    lbl = 'slope_pval_bh' if sp_col == 'slope_pval_bh' else 'slope_pval'
+
+    fig = go.Figure(_scatter_traces(df, 'neg_log_slope', 'neg_log_emp_p'))
+    fig.add_vline(x=-np.log10(slope_pval_threshold), line_dash='dash', line_color='#333333',
+                  opacity=0.7, annotation_text=f'slope α={slope_pval_threshold}',
+                  annotation_position='top right')
+    fig.add_hline(y=-np.log10(emp_p_threshold), line_dash='dot', line_color='#333333',
+                  opacity=0.7, annotation_text=f'rhythm α={emp_p_threshold}',
+                  annotation_position='bottom right')
+    fig.update_layout(title=title, xaxis_title=f'−log₁₀({lbl})',
+                      yaxis_title='−log₁₀(GammaBH)', legend_title='Label')
+    return fig
+
+
 def classification_summary(
     classifications,
     pirs_percentile=50,
@@ -379,7 +658,10 @@ def classification_summary(
         and has_emp_p
     )
 
-    panel_names = ['label_distribution', 'pirs_vs_tau', 'pirs_score_distribution']
+    panel_names = [
+        'label_distribution', 'pirs_vs_tau', 'pirs_score_distribution',
+        'top_constitutive_candidates',
+    ]
     if has_emp_p:
         panel_names += ['volcano', 'tau_pval_scatter']
     if has_pval:
@@ -388,6 +670,7 @@ def classification_summary(
         panel_names.append('slope_vs_rhythm')
     if has_phase:
         panel_names.append('phase_wheel')
+        panel_names.append('phase_amplitude_scatter')
     if has_period:
         panel_names.append('period_distribution')
 
@@ -562,6 +845,60 @@ def _add_panel(fig, name, df, row, col, polar_ref=None, **kw):
             subplot=polar_ref or 'polar',
         )
         fig.add_trace(trace)
+
+    elif name == 'slope_pval_scatter':
+        sp_col = 'slope_pval_bh' if _has(df, 'slope_pval_bh') else 'slope_pval'
+        if _has(df, sp_col):
+            sub = df.dropna(subset=['pirs_score', sp_col])
+            pirs_cut = float(np.percentile(sub['pirs_score'], pp))
+            sub = sub.assign(neg_log_slope=_safe_neglog10(sub[sp_col]))
+            _traces(_scatter_traces(sub, 'pirs_score', 'neg_log_slope'))
+            fig.add_hline(y=-np.log10(sp), line_dash='dash', line_color='#333333', opacity=0.7,
+                          row=row, col=col)
+            fig.add_vline(x=pirs_cut, line_dash='dot', line_color='#333333', opacity=0.7,
+                          row=row, col=col)
+
+    elif name == 'phase_amplitude_scatter' and _has(df, 'phase_mean'):
+        sub = df[df['label'].isin(['rhythmic', 'noisy_rhythmic'])].dropna(
+            subset=['phase_mean', 'tau_mean']
+        )
+        if sub.empty:
+            sub = df.dropna(subset=['phase_mean', 'tau_mean'])
+        _traces(_scatter_traces(sub, 'phase_mean', 'tau_mean'))
+
+    elif name == 'top_constitutive_candidates':
+        import pandas as _pd
+        top = df.dropna(subset=['pirs_score']).nsmallest(20, 'pirs_score')
+        all_sc  = df['pirs_score'].dropna()
+        pc      = float(np.percentile(all_sc, pp))
+        p_col   = ('pval_bh'      if _has(df, 'pval_bh')      else
+                   'pval'          if _has(df, 'pval')          else None)
+        sp_col2 = ('slope_pval_bh' if _has(df, 'slope_pval_bh') else
+                   'slope_pval'    if _has(df, 'slope_pval')    else None)
+
+        def _bc(r):
+            lbl = r['label'] if 'label' in r.index else 'constitutive'
+            if lbl != 'constitutive':
+                return LABEL_COLORS.get(lbl, '#8C8C8C')
+            if p_col is None:
+                return LABEL_COLORS['constitutive']
+            ps = _pd.notna(r[p_col]) and r[p_col] <= 0.05
+            sn = sp_col2 is None or (_pd.notna(r[sp_col2]) and r[sp_col2] > 0.05)
+            if ps and sn:
+                return LABEL_COLORS['constitutive']
+            return '#7BA7D4' if ps else '#B0C4DE'
+
+        colors2 = [_bc(r) for _, r in top.iterrows()]
+        top_rev = top.iloc[::-1]
+        fig.add_trace(go.Bar(
+            x=top_rev['pirs_score'].values,
+            y=top_rev.index.tolist(),
+            orientation='h',
+            marker_color=colors2[::-1],
+            showlegend=False,
+        ), row=row, col=col)
+        fig.add_vline(x=pc, line_dash='dash', line_color='#333333', opacity=0.7,
+                      row=row, col=col)
 
     elif name == 'period_distribution' and _has(df, 'period_mean'):
         for lbl in ('rhythmic', 'noisy_rhythmic'):
