@@ -77,11 +77,24 @@ r = ranker(df, anova=False)       # DataFrame passed directly
 ranked = r.pirs_sort()
 ```
 
+## Gallery
+
+**Classification overview** — label distribution, PIRS score by class, and
+mean expression profile per label:
+
+![Classification overview](docs/figures/01_overview.png)
+
+**Cross-omics comparison** — TauMean scatter coloured by rhythmicity status
+(maintained rhythmic, gained, lost, non-rhythmic) across proteomics and
+RNA-seq layers:
+
+![Cross-omics rhythmicity scatter](docs/figures/33_cross_layer_rhythmicity_scatter.png)
+
 ## Examples
 
-Six self-contained scripts in [`examples/`](examples/) walk through the full
+Seven self-contained scripts in [`examples/`](examples/) walk through the full
 CIRC workflow — from a single classification run to a proteomics pipeline with
-batch-effect removal, validation, and visualization.  See the
+batch-effect removal, cross-omics comparison, and visualization.  See the
 [examples README](examples/README.md) for the full catalogue.
 
 ```bash

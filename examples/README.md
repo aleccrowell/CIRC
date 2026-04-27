@@ -1,9 +1,10 @@
 # CIRC — Example Scripts
 
-Six runnable examples that walk through the full CIRC workflow, from a
+Seven runnable examples that walk through the full CIRC workflow, from a
 single classification run to a proteomics-scale pipeline with batch-effect
-removal.  Each script is self-contained: it simulates its own data, runs
-the relevant CIRC steps, and writes figures to `./figures/`.
+removal and cross-omics comparison.  Each script is self-contained: it
+simulates its own data, runs the relevant CIRC steps, and writes figures to
+`./figures/`.
 
 ## Prerequisites
 
@@ -38,7 +39,9 @@ classifies it with `Classifier.run_all()`, and produces three focused views:
 - Constitutive characterization (top constitutive candidates, mean profiles
   by label)
 
-Figures saved: `01_` – `08_`
+![Classification overview](../docs/figures/01_overview.png)
+
+Figures saved: `01_` – `04_`
 
 ---
 
@@ -48,13 +51,13 @@ Explores the classifier's decision space and shows how threshold changes
 affect label distributions.  Useful for tuning sensitivity vs. specificity
 before running on real data.
 
-- PIRS score distribution and score-vs-rank curve
-- τ vs p-value scatter coloured by label
-- Threshold sensitivity analysis (how label counts shift as the PIRS
-  cut-off moves)
-- Class-conditional score distributions
+- PIRS score vs rhythmicity significance scatter
+- Slope significance vs rhythmicity significance
+- Threshold sensitivity analysis (how label counts shift as the PIRS cut-off moves)
 
-Figures saved: `09_` – `14_`
+![Decision space](../docs/figures/05_decision_space.png)
+
+Figures saved: `05_` – `09_`
 
 ---
 
@@ -64,12 +67,13 @@ Quantitative benchmarking against simulation ground truth.  Requires known
 labels, so it always uses a simulation; swap in real data + ground-truth
 labels from an independent assay to evaluate on your own dataset.
 
-- Precision–recall curves for constitutive detection
+- Precision–recall curves for constitutive, circadian, and linear detection
 - Multi-class ROC curves (one-vs-rest)
-- Calibration / confusion matrix
-- `classification_summary` adaptive summary panel
+- Score comparison panels
 
-Figures saved: `15_` – `20_`
+![Precision–recall curves](../docs/figures/10_pr_curves.png)
+
+Figures saved: `10_` – `14_`
 
 ---
 
@@ -89,6 +93,8 @@ step in sequence:
 > `tpoints=12` is required for SVA — its circular-correlation window needs
 > at least 12 unique timepoints.
 
+![Batch correction QC](../docs/figures/25_normalization_qc.png)
+
 Figures saved: `25_` – `30_`
 
 ---
@@ -103,7 +109,9 @@ Drilling into individual genes / proteins after classification:
 
 Useful for manual review of hits before follow-up experiments.
 
-Figures saved: `21_` – `23_`
+![Top rhythmic profiles](../docs/figures/15_rhythmic_profiles.png)
+
+Figures saved: `15_` – `19_`
 
 ---
 
@@ -112,11 +120,31 @@ Figures saved: `21_` – `23_`
 Two-condition comparison (e.g., wild-type vs. knock-out).  Classifies two
 independently simulated datasets and compares them:
 
-- Venn / upset diagram of label overlap
-- Phase-shift analysis for genes rhythmic in both conditions
-- Condition-specific gains and losses
+- TauMean scatter coloured by rhythmicity status (maintained / gained / lost)
+- Phase-shift histogram for genes rhythmic in both conditions
+- Label transition heatmap (condition A → condition B)
+- Δ TauMean volcano plot with significance
 
-Figures saved: `24_`
+![Condition comparison summary](../docs/figures/23_comparison_summary.png)
+
+Figures saved: `20_` – `24_`
+
+---
+
+### 07 — Cross-omics: proteomics vs RNA-seq ([`07_compare_proteomics_vs_expression.py`](07_compare_proteomics_vs_expression.py))
+
+**Multi-omic comparison** across molecular layers.  Classifies proteomics and
+RNA-seq datasets sharing the same feature identifiers, then identifies which
+proteins/genes are rhythmic at each molecular level:
+
+- Per-layer label distributions
+- Cross-layer TauMean scatter coloured by rhythmicity status
+- Divergent feature tables (protein-only rhythmic; RNA-only rhythmic)
+- Peptide → protein aggregation workflow (`aggregate_to_protein`)
+
+![Cross-omics rhythmicity scatter](../docs/figures/33_cross_layer_rhythmicity_scatter.png)
+
+Figures saved: `31_` – `33_`
 
 ---
 
@@ -127,12 +155,13 @@ different scripts can coexist in `./figures/` without collisions:
 
 | Script | Figure range |
 |---|---|
-| 01 | 01 – 08 |
-| 02 | 09 – 14 |
-| 03 | 15 – 20 |
-| 05 | 21 – 23 |
-| 06 | 24 |
+| 01 | 01 – 04 |
+| 02 | 05 – 09 |
+| 03 | 10 – 14 |
+| 05 | 15 – 19 |
+| 06 | 20 – 24 |
 | 04 | 25 – 30 |
+| 07 | 31 – 33 |
 
 ## Next steps
 

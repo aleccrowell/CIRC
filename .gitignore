@@ -208,3 +208,5 @@ __marimo__/
 
 # Generated example output
 figures/
+!docs/figures/
+!docs/figures/**
