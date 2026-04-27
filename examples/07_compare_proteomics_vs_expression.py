@@ -67,12 +67,12 @@ LAYER_LABELS = ("Proteomics", "RNA-seq")
 # ---------------------------------------------------------------------------
 print("Simulating multi-omic datasets …")
 
-sim_core_prot      = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=20)
-sim_core_rna       = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=21)
-sim_prot_only_rhy  = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=22)
+sim_core_prot      = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=20, amp_noise=0.35)
+sim_core_rna       = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=21, amp_noise=0.35)
+sim_prot_only_rhy  = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=22, amp_noise=0.35)
 sim_prot_only_flat = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=0.0, plin=0.0, rseed=26)
 sim_rna_only_flat  = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=0.0, plin=0.0, rseed=27)
-sim_rna_only_rhy   = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=23)
+sim_rna_only_rhy   = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=23, amp_noise=0.35)
 sim_bg_prot        = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=24)
 sim_bg_rna         = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=25)
 
