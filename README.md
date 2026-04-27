@@ -10,6 +10,7 @@ integrating four complementary tools:
 | `circ.bootjtk` | Bootstrap empirical JTK circadian rhythm detection |
 | `circ.expression_classification` | Unified classifier combining PIRS and BooteJTK |
 | `circ.visualization` | Classification and benchmark plots |
+| `circ.compare` | Cross-condition and cross-omics comparison |
 
 A single `circ` CLI entry point wraps all three core tools, and all modules share
 the same `ZT{HH}_{rep}` column format so outputs chain directly between steps.
@@ -172,6 +173,38 @@ Full API reference for each module lives in its own README:
 [`circ.bootjtk`](circ/bootjtk/README.md) ·
 [`circ.expression_classification`](circ/expression_classification/README.md) ·
 [`circ.visualization`](circ/visualization/README.md)
+
+### `circ.compare` — condition and cross-omics comparison
+
+```python
+from circ.compare import compare_conditions, aggregate_to_protein, label_change_table
+
+# Compare two Classifier result DataFrames (same gene IDs, different conditions
+# or molecular layers).  Returns per-gene effect sizes and significance tests.
+comparison = compare_conditions(result_A, result_B)
+
+# Key output columns:
+#   rhythmicity_status  — "maintained_rhythmic" / "gained" / "lost" /
+#                          "maintained_nonrhythmic"
+#   delta_tau           — TauMean B − A
+#   delta_phase         — circular phase shift B − A (h), wrapped to ±12 h
+#   tau_padj            — BH-adjusted p-value for rhythmicity change
+#                          (requires bootstrap uncertainty columns from BooteJTK)
+#   phase_padj          — BH-adjusted p-value for phase shift
+
+# Readable label-transition table (condition A labels → condition B labels)
+label_change_table(comparison)
+
+# Cross-omics: collapse peptide-level proteomics results to protein level
+# before comparing with a gene-expression result
+prot = aggregate_to_protein(peptide_level_result)
+comparison = compare_conditions(prot, rna_result)
+```
+
+Comparison plots live in `circ.visualization` — see
+[`circ/visualization/README.md`](circ/visualization/README.md) for
+`rhythmicity_shift_scatter`, `phase_shift_histogram`, `label_transition_heatmap`,
+`delta_tau_volcano`, and `comparison_summary`.
 
 ### `circ.io` — shared I/O utilities
 

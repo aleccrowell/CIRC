@@ -133,7 +133,7 @@ axes[0].set_xlim(0, xmax)
 axes[1].set_xlim(0, xmax)
 
 plt.tight_layout()
-out = FIGURES / "20_label_comparison.png"
+out = FIGURES / "26_label_comparison.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -155,7 +155,7 @@ viz.phase_wheel(result_A, ax=ax_A, title=f"Phase — {COND_LABELS[0]}")
 viz.phase_wheel(result_B, ax=ax_B, title=f"Phase — {COND_LABELS[1]}")
 
 plt.tight_layout()
-out = FIGURES / "21_phase_comparison.png"
+out = FIGURES / "27_phase_comparison.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -199,7 +199,7 @@ shared_patch = mpatches.Patch(color="#2E8B57",
 fig.legend(handles=[shared_patch], loc="lower center", ncol=1,
            frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
 plt.tight_layout()
-out = FIGURES / "22_constitutive_overlap.png"
+out = FIGURES / "28_constitutive_overlap.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -232,7 +232,7 @@ print(label_change_table(comparison).to_string(), "\n")
 # label transition heatmap, phase shift histogram, and delta tau volcano.
 fig = viz.comparison_summary(
     comparison,
-    outpath=str(FIGURES / "23_comparison_summary.png"),
+    outpath=str(FIGURES / "29_comparison_summary.png"),
 )
 plt.close(fig)
 print(f"  saved → {FIGURES / '23_comparison_summary.png'}")
@@ -315,7 +315,7 @@ if _HAS_PLOTLY:
         xaxis_title=f"TauMean — {COND_LABELS[0]}",
         yaxis_title=f"TauMean — {COND_LABELS[1]}",
     )
-    out = FIGURES / "24_interactive_rhythmicity_shift.html"
+    out = FIGURES / "30_interactive_rhythmicity_shift.html"
     fig_html.write_html(str(out))
     print(f"  saved → {out}")
 

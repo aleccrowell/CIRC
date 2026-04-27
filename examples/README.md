@@ -20,9 +20,20 @@ poetry run python examples/<script>.py          # save figures only
 poetry run python examples/<script>.py --show  # save + display interactively
 ```
 
+To run every example in sequence:
+
+```bash
+poetry run python examples/run_all.py
+```
+
 All figures land in `./figures/`.  Intermediate files (imputed data,
 normalized data, pool maps) are written to a `tempfile.TemporaryDirectory`
 and cleaned up automatically when the script exits.
+
+> **Stale figures:** `./figures/` is gitignored and accumulates output from
+> every run.  If you change simulation parameters or update an example, old
+> numbered files from a previous run may remain alongside new ones.  Delete
+> the directory and re-run to get a clean set.
 
 ---
 
@@ -93,9 +104,9 @@ step in sequence:
 > `tpoints=12` is required for SVA — its circular-correlation window needs
 > at least 12 unique timepoints.
 
-![Batch correction QC](../docs/figures/25_normalization_qc.png)
+![Batch correction QC](../docs/figures/15_normalization_qc.png)
 
-Figures saved: `25_` – `30_`
+Figures saved: `15_` – `20_`
 
 ---
 
@@ -109,9 +120,9 @@ Drilling into individual genes / proteins after classification:
 
 Useful for manual review of hits before follow-up experiments.
 
-![Top rhythmic profiles](../docs/figures/15_rhythmic_profiles.png)
+![Top rhythmic profiles](../docs/figures/21_rhythmic_profiles.png)
 
-Figures saved: `15_` – `19_`
+Figures saved: `21_` – `25_`
 
 ---
 
@@ -125,9 +136,9 @@ independently simulated datasets and compares them:
 - Label transition heatmap (condition A → condition B)
 - Δ TauMean volcano plot with significance
 
-![Condition comparison summary](../docs/figures/23_comparison_summary.png)
+![Condition comparison summary](../docs/figures/29_comparison_summary.png)
 
-Figures saved: `20_` – `24_`
+Figures saved: `26_` – `30_`
 
 ---
 
@@ -158,9 +169,9 @@ different scripts can coexist in `./figures/` without collisions:
 | 01 | 01 – 04 |
 | 02 | 05 – 09 |
 | 03 | 10 – 14 |
-| 05 | 15 – 19 |
-| 06 | 20 – 24 |
-| 04 | 25 – 30 |
+| 04 | 15 – 20 |
+| 05 | 21 – 25 |
+| 06 | 26 – 30 |
 | 07 | 31 – 33 |
 
 ## Next steps

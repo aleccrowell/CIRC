@@ -63,6 +63,41 @@ from circ.visualization import LABEL_COLORS
 #  'variable': '#B47CC7', 'noisy_rhythmic': '#C4AD66', 'unclassified': '#8C8C8C'}
 ```
 
+## Comparison plots
+
+Functions for visualizing the output of `circ.compare.compare_conditions()`.
+All accept the comparison DataFrame as their first argument and an optional
+`ax` keyword for composing multi-panel figures.
+
+```python
+import circ.visualization as viz
+
+# TauMean scatter coloured by rhythmicity status (maintained / gained / lost)
+viz.rhythmicity_shift_scatter(comparison, alpha=0.05, ax=ax)
+
+# Histogram of circular phase differences (genes rhythmic in both conditions)
+viz.phase_shift_histogram(comparison, ax=ax)
+
+# Heatmap of label transitions from condition A to condition B
+viz.label_transition_heatmap(comparison, ax=ax)
+
+# Volcano: Δ TauMean vs −log₁₀(tau_padj)
+# Requires bootstrap uncertainty columns (tau_std, n_boots) in both results
+viz.delta_tau_volcano(comparison, alpha=0.05, ax=ax)
+
+# Adaptive multi-panel summary (scatter + heatmap + histogram + volcano)
+fig = viz.comparison_summary(comparison, outpath="comparison.png")
+```
+
+`_STATUS_COLORS` maps each rhythmicity-change category to a consistent hex
+color for custom plots:
+
+```python
+from circ.visualization.compare import _STATUS_COLORS
+# {'maintained_rhythmic': '#6ACC65', 'gained': '#D65F5F',
+#  'lost': '#4878CF', 'maintained_nonrhythmic': '#CCCCCC'}
+```
+
 ## `circ.visualization.interactive` — Interactive (Plotly) plots
 
 The `interactive` sub-module provides Plotly equivalents of all static plots.

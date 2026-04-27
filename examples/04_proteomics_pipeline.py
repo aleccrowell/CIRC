@@ -176,7 +176,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
 
     fig.suptitle("Batch correction QC: per-sample median expression", y=1.01)
     plt.tight_layout()
-    out = FIGURES / "25_normalization_qc.png"
+    out = FIGURES / "15_normalization_qc.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved → {out}")
@@ -191,7 +191,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
     viz.pirs_vs_tau(result, ax=axes[1])
     viz.top_constitutive_candidates(result, n_top=15, ax=axes[2])
     plt.tight_layout()
-    out = FIGURES / "26_classification_results.png"
+    out = FIGURES / "16_classification_results.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved → {out}")
@@ -204,7 +204,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
     )
     viz.phase_amplitude_scatter(result, ax=axes[1])
     plt.tight_layout()
-    out = FIGURES / "27_profiles_and_phase.png"
+    out = FIGURES / "17_profiles_and_phase.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved → {out}")
@@ -228,7 +228,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
         title="ROC: all classification tasks",
     )
     plt.tight_layout()
-    out = FIGURES / "28_benchmark.png"
+    out = FIGURES / "18_benchmark.png"
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved → {out}")
@@ -237,7 +237,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
     print("Adaptive summary …")
     fig = viz.classification_summary(
         result,
-        outpath=str(FIGURES / "29_proteomics_summary.png"),
+        outpath=str(FIGURES / "19_proteomics_summary.png"),
     )
     plt.close(fig)
     print(f"  saved → {FIGURES / '29_proteomics_summary.png'}")
@@ -246,7 +246,7 @@ with tempfile.TemporaryDirectory(prefix="circ_prot_") as tmp:
     if _HAS_PLOTLY:
         print("Interactive …")
         fig_html = iviz.top_constitutive_candidates(result, n_top=30)
-        out = FIGURES / "30_interactive_proteomics_candidates.html"
+        out = FIGURES / "20_interactive_proteomics_candidates.html"
         fig_html.write_html(str(out))
         print(f"  saved → {out}")
 

@@ -140,7 +140,7 @@ for idx, gene_id in enumerate(top_rhythmic.index):
 
 fig.suptitle("Top rhythmic genes — individual profiles (τ ranked)", fontsize=11)
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-out = FIGURES / "15_rhythmic_profiles.png"
+out = FIGURES / "21_rhythmic_profiles.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -173,7 +173,7 @@ for idx, gene_id in enumerate(top_constitutive.index):
 fig.suptitle("Top constitutive gene candidates — individual profiles (PIRS ranked)",
              fontsize=11)
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-out = FIGURES / "16_constitutive_profiles.png"
+out = FIGURES / "22_constitutive_profiles.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -213,7 +213,7 @@ for ax, genes, title_suffix, color_key in [
     )
 
 plt.tight_layout()
-out = FIGURES / "17_annotated_decision_space.png"
+out = FIGURES / "23_annotated_decision_space.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")
@@ -229,13 +229,13 @@ if _HAS_PLOTLY:
 
     fig_html = iviz.pirs_vs_tau(result,
                                 title="Hover to identify genes — PIRS vs TauMean")
-    out = FIGURES / "18_interactive_gene_hunt.html"
+    out = FIGURES / "24_interactive_gene_hunt.html"
     fig_html.write_html(str(out))
     print(f"  saved → {out}")
 
     fig_html = iviz.tau_pval_scatter(result,
                                      title="Hover to identify genes — rhythmicity decision space")
-    out = FIGURES / "19_interactive_rhythm_space.html"
+    out = FIGURES / "25_interactive_rhythm_space.html"
     fig_html.write_html(str(out))
     print(f"  saved → {out}")
 
