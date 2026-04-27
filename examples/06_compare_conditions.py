@@ -235,7 +235,7 @@ fig = viz.comparison_summary(
     outpath=str(FIGURES / "29_comparison_summary.png"),
 )
 plt.close(fig)
-print(f"  saved → {FIGURES / '23_comparison_summary.png'}")
+print(f"  saved → {FIGURES / '29_comparison_summary.png'}")
 
 # ---------------------------------------------------------------------------
 # 6. Top genes with significant rhythmicity or phase changes
