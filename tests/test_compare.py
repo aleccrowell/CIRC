@@ -3,12 +3,47 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from circ.compare import compare_conditions, label_change_table, _circular_diff, _bh_correct
+from circ.compare import (
+    aggregate_to_protein,
+    compare_conditions,
+    label_change_table,
+    _circular_diff,
+    _bh_correct,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _make_prot_result(rseed=0, with_uncertainty=False, n_proteins=50, peptides_per_protein=3):
+    """Proteomics-style result with a (Peptide, Protein) MultiIndex."""
+    rng = np.random.default_rng(rseed)
+    n = n_proteins * peptides_per_protein
+    proteins = [f'PROT_{p:04d}' for p in range(n_proteins) for _ in range(peptides_per_protein)]
+    peptides = [f'PEP_{i:04d}' for i in range(n)]
+    idx = pd.MultiIndex.from_arrays([peptides, proteins], names=['Peptide', 'Protein'])
+    tau   = rng.uniform(0.0, 1.0, n)
+    emp_p = np.where(tau > 0.5, rng.uniform(0.0, 0.05, n), rng.uniform(0.05, 1.0, n))
+    pirs  = rng.uniform(0.0, 2.0, n)
+    phase = rng.uniform(0.0, 24.0, n)
+    labels = np.where(
+        (tau > 0.5) & (emp_p < 0.05), 'rhythmic',
+        np.where(pirs < np.percentile(pirs, 50), 'constitutive', 'variable'),
+    )
+    df = pd.DataFrame({
+        'tau_mean':   tau,
+        'emp_p':      emp_p,
+        'pirs_score': pirs,
+        'phase_mean': phase,
+        'label':      labels,
+    }, index=idx)
+    if with_uncertainty:
+        df['tau_std']   = rng.uniform(0.05, 0.2, n)
+        df['phase_std'] = rng.uniform(0.5, 2.0, n)
+        df['n_boots']   = 50
+    return df
+
 
 def _make_result(rseed=0, with_uncertainty=False, n=100, index_prefix='gene'):
     rng = np.random.default_rng(rseed)
@@ -225,6 +260,86 @@ class TestCompareConditions:
         B = _make_result(rseed=1).drop(columns=['phase_mean'])
         result = compare_conditions(A, B)
         assert 'delta_phase' not in result.columns
+
+    def test_raises_for_multiindex_input(self):
+        prot = _make_prot_result(rseed=0)
+        rna  = _make_result(rseed=1)
+        with pytest.raises(ValueError, match='MultiIndex'):
+            compare_conditions(prot, rna)
+
+    def test_raises_for_multiindex_second_arg(self):
+        rna  = _make_result(rseed=0)
+        prot = _make_prot_result(rseed=1)
+        with pytest.raises(ValueError, match='MultiIndex'):
+            compare_conditions(rna, prot)
+
+
+# ---------------------------------------------------------------------------
+# aggregate_to_protein
+# ---------------------------------------------------------------------------
+
+class TestAggregateToProtein:
+    def test_passthrough_flat_index(self):
+        result = _make_result(rseed=0)
+        out = aggregate_to_protein(result)
+        pd.testing.assert_frame_equal(out, result)
+
+    def test_output_indexed_by_protein(self):
+        result = _make_prot_result(rseed=0)
+        out = aggregate_to_protein(result)
+        assert not isinstance(out.index, pd.MultiIndex)
+        assert out.index.name == 'Protein'
+
+    def test_n_rows_equals_n_proteins(self):
+        result = _make_prot_result(rseed=0, n_proteins=20, peptides_per_protein=3)
+        out = aggregate_to_protein(result)
+        assert len(out) == 20
+
+    def test_numeric_columns_averaged(self):
+        result = _make_prot_result(rseed=0, n_proteins=10, peptides_per_protein=2)
+        result = result.copy()
+        result['tau_mean'] = 0.7
+        out = aggregate_to_protein(result)
+        np.testing.assert_allclose(out['tau_mean'].values, 0.7)
+
+    def test_label_majority_vote(self):
+        result = _make_prot_result(rseed=0, n_proteins=1, peptides_per_protein=3)
+        result = result.copy()
+        result.iloc[0, result.columns.get_loc('label')] = 'rhythmic'
+        result.iloc[1, result.columns.get_loc('label')] = 'rhythmic'
+        result.iloc[2, result.columns.get_loc('label')] = 'constitutive'
+        out = aggregate_to_protein(result)
+        assert out.iloc[0]['label'] == 'rhythmic'
+
+    def test_phase_circular_mean(self):
+        """Circular mean of 23 h and 1 h must be near 0 h, not 12 h."""
+        result = _make_prot_result(rseed=0, n_proteins=1, peptides_per_protein=2)
+        result = result.copy()
+        result['phase_mean'] = [23.0, 1.0]
+        out = aggregate_to_protein(result)
+        phase = out['phase_mean'].iloc[0]
+        assert phase < 2.0 or phase > 22.0
+
+    def test_preserves_columns(self):
+        result = _make_prot_result(rseed=0, with_uncertainty=True)
+        out = aggregate_to_protein(result)
+        for col in result.columns:
+            assert col in out.columns
+
+    def test_preserves_column_order(self):
+        result = _make_prot_result(rseed=0, with_uncertainty=True)
+        out = aggregate_to_protein(result)
+        assert list(out.columns) == list(result.columns)
+
+    def test_aggregate_then_compare(self):
+        """Protein-level result after aggregation must work with compare_conditions."""
+        prot = aggregate_to_protein(_make_prot_result(rseed=0, n_proteins=50, peptides_per_protein=2))
+        # Build RNA result sharing some protein IDs
+        prot_ids = list(prot.index[:30])
+        rna = _make_result(rseed=1, n=30)
+        rna.index = pd.Index(prot_ids, name='#')
+        result = compare_conditions(prot, rna)
+        assert len(result) == 30
 
 
 # ---------------------------------------------------------------------------

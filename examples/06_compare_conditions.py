@@ -79,8 +79,8 @@ COND_COLORS = ("#4878CF", "#D65F5F")
 # the rhythmic gene sets rarely overlap at typical detection thresholds.
 # ---------------------------------------------------------------------------
 print("Simulating shared rhythmic core …")
-sim_core_A = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=10)
-sim_core_B = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=11)
+sim_core_A = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=10, amp_noise=0.35)
+sim_core_B = simulate(tpoints=8, nrows=60, nreps=2, pcirc=1.0, plin=0.0, rseed=11, amp_noise=0.35)
 
 print("Simulating condition-specific backgrounds …")
 sim_bg_A = simulate(tpoints=8, nrows=240, nreps=2, pcirc=0.20, plin=0.10, rseed=1)
