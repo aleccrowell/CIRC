@@ -70,6 +70,27 @@ def test_prim_cor_circadian_length(rnaseq_file):
     assert len(obj.cors) == obj.data.shape[0]
 
 
+def test_prim_cor_4h_sampling_nonzero(tmp_path):
+    """circ_cor with 4h sampling must not alias all correlations to zero.
+
+    The old hardcoded per=12 aliased to zero with only 6 unique timepoints
+    (12 > 6, so np.roll wrapped to a no-op shift for both per and per//2).
+    The fix derives per=6 from the 4h spacing, giving a valid half-period shift.
+    """
+    cols = [f"ZT{tp:02d}_{r}" for tp in range(4, 25, 4) for r in (1, 2)]
+    np.random.seed(0)
+    df = pd.DataFrame(np.random.randn(30, len(cols)), columns=cols)
+    df.index = [f"gene_{i}" for i in range(30)]
+    df.index.name = "#"
+    path = str(tmp_path / "rnaseq_4h.txt")
+    df.to_csv(path, sep="\t")
+    obj = sva(path, design="c", data_type="r")
+    obj.pool_normalize()
+    obj.get_tpoints()
+    obj.prim_cor()
+    assert not np.all(obj.cors == 0), "all cors zero — per likely aliased to a no-op shift"
+
+
 def test_prim_cor_timecourse_length(rnaseq_file):
     obj = sva(rnaseq_file, design="t", data_type="r")
     obj.pool_normalize()

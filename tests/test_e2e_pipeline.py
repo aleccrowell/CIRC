@@ -34,9 +34,9 @@ def pipeline(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("e2e_pipeline")
 
     # 1. Simulate
-    # tpoints=12 is required: SVA's circ_cor() shifts by 12 and 6 in the
-    # per-timepoint means matrix, so fewer than 12 unique timepoints causes
-    # all correlations to alias to zero and data_reduced becomes empty.
+    # tpoints=12 gives 12 unique timepoints at 2h spacing, satisfying SVA's
+    # circ_cor() minimum of 24 // tpoint_spacing unique timepoints (one full
+    # 24h period).  Fewer unique timepoints alias to zero correlation.
     sim = simulate(
         tpoints=12, nrows=100, nreps=2, tpoint_space=2,
         pcirc=0.3, plin=0.2,

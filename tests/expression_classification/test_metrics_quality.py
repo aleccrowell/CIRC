@@ -321,15 +321,31 @@ class TestLabelAccuracy:
             f"prevalence ({baseline:.3f})"
         )
 
-    def test_linear_label_precision_above_chance(self, clean_pipeline):
+    def test_slope_detector_precision_above_chance(self, clean_pipeline):
+        """Genes flagged by slope_pval < 0.05 should be enriched for true linear genes.
+
+        A linear ramp that covers exactly one 24 h cycle aliases strongly to JTK's
+        cosine template (tau_mean ≈ 0.97), so the rhythmic flag fires before the
+        sloped flag and the classifier never emits the "linear" label in the standard
+        fixture.  The slope_pval score itself is still informative: this test checks
+        the *detector* precision (does a significant slope p-value enrich for truly
+        linear genes?) rather than the *label* precision, which would always skip.
+        """
         result = clean_pipeline["result"]
         tc = clean_pipeline["true_classes"]
-        if (result["label"] == "linear").sum() < 3:
-            pytest.skip("too few 'linear' labels")
-        precision, _ = self._precision_recall(result, tc, "linear", "Linear")
-        baseline = tc["Linear"].mean()
+        if "slope_pval" not in result.columns:
+            pytest.skip("slope_pval not computed")
+        shared = result.index.intersection(tc.index)
+        flagged = result.loc[shared, "slope_pval"] < 0.05
+        if flagged.sum() < 3:
+            pytest.skip("too few genes flagged by slope_pval < 0.05")
+        act_pos = tc.loc[shared, "Linear"] == 1
+        tp = (flagged & act_pos).sum()
+        fp = (flagged & ~act_pos).sum()
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        baseline = tc.loc[shared, "Linear"].mean()
         assert precision >= baseline, (
-            f"'linear' precision ({precision:.3f}) should exceed "
+            f"slope_pval<0.05 precision ({precision:.3f}) should exceed "
             f"prevalence ({baseline:.3f})"
         )
 
@@ -348,6 +364,90 @@ class TestLabelAccuracy:
         assert n_detected >= 1, (
             f"Expected at least 1 truly circadian gene labelled rhythmic/noisy_rhythmic "
             f"on clean data; got 0 out of {len(circ_ids)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Longer timeseries: 2-cycle (48h) data must work end-to-end
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def long_pipeline(tmp_path_factory):
+    """Run Classifier on 2-cycle (48h) data.
+
+    Uses the same noise levels as clean_pipeline so differences reflect
+    timeseries length, not signal quality.  With 2 complete 24h cycles:
+    - circadian genes have 2 periods of data → BooteJTK should detect them
+    - linear ramps alias to a broken (non-monotonic) phase pattern after
+      modulo folding, so the 'linear' label fires instead of 'rhythmic'
+    """
+    tmp = tmp_path_factory.mktemp("long_quality")
+    out = str(tmp / "long_clean.txt")
+
+    sim = simulate(
+        tpoints=24, nrows=150, nreps=2, tpoint_space=2,
+        pcirc=0.35, plin=0.25,
+        phase_noise=0.1, amp_noise=0.4,
+        n_batch_effects=0, p_miss=0.0,
+        rseed=13,
+    )
+    sim.write_output(out_name=out)
+
+    true_classes = pd.read_csv(
+        out.replace(".txt", "_true_classes.txt"), sep="\t", index_col=0
+    )
+
+    clf = Classifier(out, reps=2, size=20)
+    result = clf.run_all(slope_pvals=True, n_permutations=99)
+
+    return {"result": result, "true_classes": true_classes}
+
+
+class TestLongerTimeseries:
+    """Pipeline handles 2-cycle (48h) timeseries and correctly labels linear genes.
+
+    With a single 24h cycle, a linear ramp is monotonic across all 12 phases,
+    giving tau_mean ≈ 0.97 against JTK's cosine template → the ramp is
+    mis-labelled 'rhythmic' and the 'linear' label never fires.
+
+    With 2 complete cycles the modulo-folded phase means are no longer monotonic
+    (ZT0 becomes the max, ZT2 drops to the min, then values rise from ZT4 to
+    ZT22), so no 24h cosine template fits well, tau_mean stays low, and the
+    'linear' label fires correctly.
+    """
+
+    def test_circadian_detected_on_2cycle_data(self, long_pipeline):
+        """BooteJTK detects 24h rhythms on 48h data."""
+        auc = _auc(long_pipeline["result"], long_pipeline["true_classes"],
+                   "tau_mean", "Circadian", invert=False)
+        if auc is None:
+            pytest.skip("insufficient data for AUC test")
+        assert auc > 0.5, f"tau_mean → Circadian AUC={auc:.3f} on 2-cycle data; expected > 0.5"
+
+    def test_linear_label_precision_above_chance_2cycle(self, long_pipeline):
+        """'linear' label fires and is precise on 2-cycle data.
+
+        The single-cycle analogue permanently skipped because the ramp aliased
+        to the cosine template.  Two cycles break that aliasing.
+        """
+        result = long_pipeline["result"]
+        tc = long_pipeline["true_classes"]
+        shared = result.index.intersection(tc.index)
+        n_linear = (result.loc[shared, "label"] == "linear").sum()
+        if n_linear < 3:
+            pytest.fail(
+                f"'linear' label fired for only {n_linear} gene(s) on 2-cycle data; "
+                "expected the cosine aliasing to be broken at 2+ cycles."
+            )
+        act_pos = tc.loc[shared, "Linear"] == 1
+        pred_pos = result.loc[shared, "label"] == "linear"
+        tp = (pred_pos & act_pos).sum()
+        fp = (pred_pos & ~act_pos).sum()
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        baseline = tc.loc[shared, "Linear"].mean()
+        assert precision >= baseline, (
+            f"'linear' precision ({precision:.3f}) should exceed "
+            f"prevalence ({baseline:.3f}) on 2-cycle data"
         )
 
 

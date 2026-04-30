@@ -108,8 +108,7 @@ class simulate:
             p=[pcirc, plin, pconst],
         )
 
-        # One 24-hour cycle across tpoints timepoints
-        base = np.arange(0, 2 * np.pi, 2 * np.pi / self.tpoints)
+        base = 2 * np.pi * np.arange(1, self.tpoints + 1) * self.tpoint_space / 24
         ramp = np.linspace(0, 2, self.tpoints)
 
         # Build clean simulation matrix
