@@ -242,7 +242,7 @@ class sva:
             Calculates rough estimate of circadianness based on autocorrelation differences.
 
 
-            Given a period (fixed here at 12 samples) the autocorrelation is calculated at 12 and 6 samples shift and the difference indicates the degree of circadian signal.
+            Autocorrelation is calculated at one full period and one half period (in unique-timepoint space) and the difference indicates the degree of circadian signal.
 
             """
             def autocorr_vec(m, shift):
@@ -250,8 +250,10 @@ class sva:
                 shifted = np.roll(m, shift, axis=1)
                 return np.einsum('ij,ij->i', m, shifted) / np.einsum('ij,ij->i', m, m)
 
-            per = 12
             tps = np.asarray(self.tpoints)
+            unique_tps = np.unique(tps)
+            spacing = int(np.min(np.diff(unique_tps))) if len(unique_tps) > 1 else 2
+            per = 24 // max(spacing, 1)
             data = self.data.values
             # Build (nrows, n_unique_tpoints) matrix of per-timepoint means
             ave = np.column_stack([
