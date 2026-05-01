@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
-from circ.visualization.classify import LABEL_COLORS, _LABEL_ORDER, _ax
+from circ.visualization.classify import LABEL_COLORS, _ax
 
 # Colors and draw order for rhythmicity change categories
 _STATUS_COLORS = {

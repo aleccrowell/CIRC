@@ -7,7 +7,6 @@ matplotlib so they can be used in automated pipelines without a display.
 Plotting wrappers that visualise these metrics live in
 ``circ.visualization.benchmarks``.
 """
-import pandas as pd
 from sklearn.metrics import average_precision_score, roc_curve, auc
 
 

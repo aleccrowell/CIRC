@@ -308,7 +308,7 @@ def write_out(fn_out,output):
 def is_number(s):
     try:
         return np.isfinite(float(s))
-    except TypeError and ValueError:
+    except (TypeError, ValueError):
         return False
 
 
