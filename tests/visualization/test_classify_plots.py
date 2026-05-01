@@ -11,6 +11,7 @@ import matplotlib.axes
 
 from circ.visualization.classify import (
     LABEL_COLORS,
+    _zt_timepoints,
     label_distribution,
     pirs_vs_tau,
     volcano,
@@ -490,3 +491,47 @@ class TestExpressionHeatmap:
         )
         with pytest.raises(ValueError, match="ZT/CT"):
             expression_heatmap(bad_expr, minimal_clf)
+
+
+# ---------------------------------------------------------------------------
+# 3+ digit ZT/CT time support
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def three_digit_expr(minimal_clf):
+    """Expression matrix with 3-digit ZT time columns (ZT100–ZT120)."""
+    rng = np.random.default_rng(99)
+    n = len(minimal_clf)
+    cols = [f"ZT{h}_{r}" for h in [100, 104, 108, 112, 116, 120] for r in [1, 2]]
+    return pd.DataFrame(
+        rng.normal(5, 1, (n, len(cols))),
+        index=minimal_clf.index,
+        columns=cols,
+    )
+
+
+class TestThreeDigitTimepoints:
+    def test_zt_timepoints_parses_three_digits(self, three_digit_expr):
+        _, tp, unique_tp = _zt_timepoints(three_digit_expr)
+        assert set(unique_tp.tolist()) == {100, 104, 108, 112, 116, 120}
+
+    def test_zt_timepoints_parses_ct_three_digits(self, minimal_clf):
+        rng = np.random.default_rng(7)
+        n = len(minimal_clf)
+        cols = [f"CT{h}_{r}" for h in [100, 108] for r in [1, 2]]
+        expr = pd.DataFrame(
+            rng.normal(5, 1, (n, len(cols))), index=minimal_clf.index, columns=cols
+        )
+        _, tp, unique_tp = _zt_timepoints(expr)
+        assert set(unique_tp.tolist()) == {100, 108}
+
+    def test_gene_profile_three_digit(self, three_digit_expr, minimal_clf):
+        gene = three_digit_expr.index[0]
+        ax = gene_profile(three_digit_expr, gene, minimal_clf)
+        assert isinstance(ax, matplotlib.axes.Axes)
+
+    def test_expression_heatmap_three_digit(self, three_digit_expr, minimal_clf):
+        ax = expression_heatmap(three_digit_expr, minimal_clf)
+        assert isinstance(ax, matplotlib.axes.Axes)
+        assert len(ax.images) >= 1
