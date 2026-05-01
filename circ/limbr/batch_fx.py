@@ -1,9 +1,11 @@
 import itertools
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import multiprocess as _mp
-_forkserver_pool = _mp.get_context('forkserver').Pool
+
+_forkserver_pool = _mp.get_context("forkserver").Pool
 from sklearn import preprocessing
 from sklearn.decomposition import PCA
 from scipy.stats import linregress, f_oneway
@@ -17,10 +19,20 @@ from tqdm import tqdm
 
 # Per-worker globals populated once by _init_perm_worker (Pool initializer).
 # This avoids re-serialising the large residual matrix for every task.
-_perm_res = _perm_tks = _perm_designtype = _perm_tpoints = _perm_block_design = None
+_perm_res: np.ndarray | None = None
+_perm_tks: np.ndarray | None = None
+_perm_designtype: str | None = None
+_perm_tpoints: np.ndarray | None = None
+_perm_block_design: list[int] | None = None
 
 
-def _init_perm_worker(res, tks, designtype, tpoints, block_design):
+def _init_perm_worker(
+    res: np.ndarray,
+    tks: np.ndarray,
+    designtype: str,
+    tpoints: np.ndarray | None,
+    block_design: list[int] | None,
+) -> None:
     """Pool initializer: stores shared read-only data in each worker once."""
     global _perm_res, _perm_tks, _perm_designtype, _perm_tpoints, _perm_block_design
     _perm_res = res
@@ -30,13 +42,16 @@ def _init_perm_worker(res, tks, designtype, tpoints, block_design):
     _perm_block_design = block_design
 
 
-def _perm_worker(rseed):
+def _perm_worker(rseed: int) -> np.ndarray:
     """Single permutation iteration executed inside a pool worker."""
+    assert _perm_res is not None and _perm_tks is not None
     rng = np.random.default_rng(rseed * 100)
     rstar = rng.permuted(_perm_res.copy(), axis=1)
 
-    if _perm_designtype in ('c', 't'):
-        resstar = np.array([row - lowess(row, _perm_tpoints, it=1)[:, 1] for row in rstar])
+    if _perm_designtype in ("c", "t"):
+        resstar = np.array(
+            [row - lowess(row, _perm_tpoints, it=1)[:, 1] for row in rstar]
+        )
     else:
         blocks = np.asarray(_perm_block_design)
         ma = np.empty_like(rstar)
@@ -45,7 +60,7 @@ def _perm_worker(rseed):
             ma[:, idx] = rstar[:, idx].mean(axis=1, keepdims=True)
         resstar = rstar - ma
 
-    pca = PCA(svd_solver='randomized', random_state=rseed * 100)
+    pca = PCA(svd_solver="randomized", random_state=rseed * 100)
     pca.fit(resstar)
     tkstar = pca.explained_variance_ratio_
 
@@ -53,6 +68,7 @@ def _perm_worker(rseed):
     out = np.zeros(len(_perm_tks))
     out[:n] = tkstar[:n] > _perm_tks[:n]
     return out
+
 
 class sva:
     """
@@ -91,7 +107,14 @@ class sva:
 
     """
 
-    def __init__(self, source, design, data_type, blocks=None, pool=None):
+    def __init__(
+        self,
+        source: str | Path | pd.DataFrame,
+        design: str,
+        data_type: str,
+        blocks: str | None = None,
+        pool: str | None = None,
+    ) -> None:
         """
         Imports data and initializes an sva object.
 
@@ -100,19 +123,20 @@ class sva:
 
         """
         from circ.io import read_expression
+
         np.random.seed(4574)
         self.data_type = str(data_type)
         self.raw_data = read_expression(source, data_type=data_type)
         self.designtype = str(design)
-        if self.designtype == 'b':
-            self.block_design = pd.read_parquet(blocks)['block'].tolist()
+        if self.designtype == "b":
+            self.block_design = pd.read_parquet(blocks)["block"].tolist()
         if pool is not None:
-            self.norm_map = pd.read_parquet(pool)['pool_number'].to_dict()
+            self.norm_map = pd.read_parquet(pool)["pool_number"].to_dict()
         else:
             self.norm_map = None
         self.notdone = True
 
-    def pool_normalize(self):
+    def pool_normalize(self) -> None:
         """
         Preprocessing normalization.
 
@@ -129,7 +153,7 @@ class sva:
 
         """
 
-        def pool_norm(df,dmap):
+        def pool_norm(df, dmap):
             """
             Pool normalizes samples in a proteomics experiment.
 
@@ -154,9 +178,11 @@ class sva:
 
             newdf = pd.DataFrame(index=df.index)
             for column in df.columns.values:
-                if 'pool' not in column:
-                    newdf[column] = df[column].div(df['pool_'+'%02d' % dmap[column]],axis='index')
-            nonpool = [i for i in newdf.columns if 'pool' not in i]
+                if "pool" not in column:
+                    newdf[column] = df[column].div(
+                        df["pool_" + "%02d" % dmap[column]], axis="index"
+                    )
+            nonpool = [i for i in newdf.columns if "pool" not in i]
             newdf = newdf[nonpool]
             return newdf
 
@@ -181,28 +207,43 @@ class sva:
 
             """
 
-            ref = pd.concat([df[col].sort_values().reset_index(drop=True) for col in df], axis=1, ignore_index=True).mean(axis=1).values
-            for i in range(0,len(df.columns)):
+            ref = (
+                pd.concat(
+                    [df[col].sort_values().reset_index(drop=True) for col in df],
+                    axis=1,
+                    ignore_index=True,
+                )
+                .mean(axis=1)
+                .values
+            )
+            for i in range(0, len(df.columns)):
                 df = df.sort_values(df.columns[i])
                 df[df.columns[i]] = ref
             newdf = df.sort_index()
             return newdf
 
-        if (self.data_type == 'r') or (self.norm_map is None):
+        if (self.data_type == "r") or (self.norm_map is None):
             self.data = qnorm(self.raw_data)
             self.scaler = preprocessing.StandardScaler().fit(self.data.values.T)
-            self.data = pd.DataFrame(self.scaler.transform(self.data.values.T).T,columns=self.data.columns,index=self.data.index)
+            self.data = pd.DataFrame(
+                self.scaler.transform(self.data.values.T).T,
+                columns=self.data.columns,
+                index=self.data.index,
+            )
         else:
-            self.data_pnorm = pool_norm(self.raw_data,self.norm_map)
+            self.data_pnorm = pool_norm(self.raw_data, self.norm_map)
             self.data_pnorm = self.data_pnorm.replace([np.inf, -np.inf], np.nan)
             self.data_pnorm = self.data_pnorm.dropna()
             self.data_pnorm = self.data_pnorm.sort_index(axis=1)
             self.data_pnorm = qnorm(self.data_pnorm)
             self.scaler = preprocessing.StandardScaler().fit(self.data_pnorm.values.T)
-            self.data = pd.DataFrame(self.scaler.transform(self.data_pnorm.values.T).T,columns=self.data_pnorm.columns,index=self.data_pnorm.index)
+            self.data = pd.DataFrame(
+                self.scaler.transform(self.data_pnorm.values.T).T,
+                columns=self.data_pnorm.columns,
+                index=self.data_pnorm.index,
+            )
 
-
-    def get_tpoints(self):
+    def get_tpoints(self) -> None:
         """
         Extracts timepoints from header of data.
 
@@ -217,13 +258,15 @@ class sva:
 
         """
 
-        tpoints = [i.replace('ZT', '').replace('CT','') for i in self.data.columns.values]
-        tpoints = [int(i.split('_')[0]) for i in tpoints]
-        #deprecated splitting for alternative header syntax
-        #tpoints = [int(i.split('.')[0]) for i in tpoints]
+        tpoints = [
+            i.replace("ZT", "").replace("CT", "") for i in self.data.columns.values
+        ]
+        tpoints = [int(i.split("_")[0]) for i in tpoints]
+        # deprecated splitting for alternative header syntax
+        # tpoints = [int(i.split('.')[0]) for i in tpoints]
         self.tpoints = np.asarray(tpoints)
 
-    def prim_cor(self):
+    def prim_cor(self) -> None:
         """
         calculates correlation for each row against the primary variable of interest.
 
@@ -237,6 +280,7 @@ class sva:
             Array of correlations with primary variable of interest.  The calculation of this variable is determined by the designtype as specified above and the procedure described in the corresponding function.
 
         """
+
         def circ_cor():
             """
             Calculates rough estimate of circadianness based on autocorrelation differences.
@@ -245,10 +289,11 @@ class sva:
             Autocorrelation is calculated at one full period and one half period (in unique-timepoint space) and the difference indicates the degree of circadian signal.
 
             """
+
             def autocorr_vec(m, shift):
                 """Row-wise autocorrelation of a 2-D array at a given shift."""
                 shifted = np.roll(m, shift, axis=1)
-                return np.einsum('ij,ij->i', m, shifted) / np.einsum('ij,ij->i', m, m)
+                return np.einsum("ij,ij->i", m, shifted) / np.einsum("ij,ij->i", m, m)
 
             tps = np.asarray(self.tpoints)
             unique_tps = np.unique(tps)
@@ -256,10 +301,9 @@ class sva:
             per = 24 // max(spacing, 1)
             data = self.data.values
             # Build (nrows, n_unique_tpoints) matrix of per-timepoint means
-            ave = np.column_stack([
-                data[:, tps == tp].mean(axis=1) * 1e6
-                for tp in np.unique(tps)
-            ])
+            ave = np.column_stack(
+                [data[:, tps == tp].mean(axis=1) * 1e6 for tp in np.unique(tps)]
+            )
             self.cors = autocorr_vec(ave, per) - autocorr_vec(ave, per // 2)
 
         def l_cor():
@@ -270,8 +314,10 @@ class sva:
             In a timecourse, rows least affected by batch effects should be those with the best fit from a lowess model.  Goodness of fit in this case is defined as the sum of squared errors for the lowess fit.
 
             """
-            cors = [-np.sum((row - lowess(row, self.tpoints, it=1)[:, 1]) ** 2)
-                    for row in tqdm(self.data.values)]
+            cors = [
+                -np.sum((row - lowess(row, self.tpoints, it=1)[:, 1]) ** 2)
+                for row in tqdm(self.data.values)
+            ]
             self.cors = np.asarray(cors)
 
         def block_cor():
@@ -285,19 +331,20 @@ class sva:
             blocks = np.asarray(self.block_design)
             # Pre-compute block indices once rather than rebuilding per row
             block_indices = [np.where(blocks == b)[0] for b in np.unique(blocks)]
-            cors = [f_oneway(*[row[idx] for idx in block_indices])[0]
-                    for row in tqdm(self.data.values)]
+            cors = [
+                f_oneway(*[row[idx] for idx in block_indices])[0]
+                for row in tqdm(self.data.values)
+            ]
             self.cors = np.asarray(cors)
 
-        if self.designtype == 'c':
+        if self.designtype == "c":
             circ_cor()
-        elif self.designtype == 'b':
+        elif self.designtype == "b":
             block_cor()
-        elif self.designtype == 't':
+        elif self.designtype == "t":
             l_cor()
 
-
-    def reduce(self,perc_red=25):
+    def reduce(self, perc_red: float = 25) -> None:
         """
         Reduces the data based on the correlation to primary variable of interest calculated in prim_cor.
 
@@ -317,10 +364,11 @@ class sva:
             Reduced dataset.
 
         """
-        self.data_reduced = self.data[self.cors < np.percentile(self.cors, float(perc_red))]
+        self.data_reduced = self.data[
+            self.cors < np.percentile(self.cors, float(perc_red))
+        ]
 
-
-    def get_res(self,in_arr):
+    def get_res(self, in_arr: np.ndarray) -> np.ndarray:
         """
         Calculates model residuals from which to learn batch effects.
 
@@ -340,9 +388,12 @@ class sva:
             Residual matrix.
 
         """
+
         def get_l_res(arr):
             """calculates residuals from a lowess model for timecourse designs"""
-            return np.array([row - lowess(row, self.tpoints, it=1)[:, 1] for row in arr])
+            return np.array(
+                [row - lowess(row, self.tpoints, it=1)[:, 1] for row in arr]
+            )
 
         def get_b_res(arr):
             """calculates residuals from the block mean for block based designs"""
@@ -353,16 +404,16 @@ class sva:
                 ma[:, idx] = arr[:, idx].mean(axis=1, keepdims=True)
             return arr - ma
 
-        if self.designtype == 'c':
+        if self.designtype == "c":
             res_mat = get_l_res(in_arr)
-        elif self.designtype == 'b':
+        elif self.designtype == "b":
             res_mat = get_b_res(in_arr)
-        elif self.designtype == 't':
+        elif self.designtype == "t":
             res_mat = get_l_res(in_arr)
         return res_mat
 
-    #defined seperately for reuse in perm_test
-    def set_res(self):
+    # defined seperately for reuse in perm_test
+    def set_res(self) -> None:
         """
         Calls get_res()
 
@@ -376,14 +427,14 @@ class sva:
 
         self.res = self.get_res(self.data_reduced.values)
 
-    def get_tks(self,arr):
+    def get_tks(self, arr: np.ndarray) -> np.ndarray:
         """calculates the fraction of variance for each row of the residual matrix explained by each principle component with PCA"""
-        pca = PCA(svd_solver='randomized',random_state=4574)
+        pca = PCA(svd_solver="randomized", random_state=4574)
         pca.fit(arr)
         return pca.explained_variance_ratio_
 
-    #defined seperately for reuse in perm_test
-    def set_tks(self):
+    # defined seperately for reuse in perm_test
+    def set_tks(self) -> None:
         """
         Calls get_tks().
 
@@ -397,12 +448,12 @@ class sva:
 
         self.tks = self.get_tks(self.res)
 
-    def perm_test(self,nperm,npr=1):
+    def perm_test(self, nperm: int, npr: int = 1) -> None:
         """
         Performs permutation testing on residual matrix SVD.
 
         The rows of the residual matrix are first permuted.  Then get_tks is called to calculate explained variance ratios and these tks are compared to the values from the actual residual matrix.  A running total is kept for the number of times the explained variance from the permuted matrix exceeds that from the original matrix. Significance is estimated by dividing these totals by the number of permutations.  When npr > 1 a multiprocess Pool is used to parallelise the permutations.
-        
+
         Parameters
         ----------
         nperm : int
@@ -416,6 +467,7 @@ class sva:
             Estimated significances for each batch effect.
 
         """
+
         def single_it(rseed):
             rng = np.random.default_rng(rseed * 100)
             rstar = rng.permuted(self.res.copy(), axis=1)
@@ -428,20 +480,26 @@ class sva:
 
         seeds = range(int(nperm))
         if int(npr) > 1:
-            tpoints = getattr(self, 'tpoints', None)
-            block_design = getattr(self, 'block_design', None)
+            tpoints = getattr(self, "tpoints", None)
+            block_design = getattr(self, "block_design", None)
             chunksize = max(1, int(nperm) // (int(npr) * 4))
             init_args = (self.res, self.tks, self.designtype, tpoints, block_design)
-            with _forkserver_pool(int(npr), initializer=_init_perm_worker, initargs=init_args) as pool:
-                output = list(tqdm(
-                    pool.imap_unordered(_perm_worker, seeds, chunksize=chunksize),
-                    total=int(nperm), desc='permuting', smoothing=0,
-                ))
+            with _forkserver_pool(
+                int(npr), initializer=_init_perm_worker, initargs=init_args
+            ) as pool:
+                output = list(
+                    tqdm(
+                        pool.imap_unordered(_perm_worker, seeds, chunksize=chunksize),
+                        total=int(nperm),
+                        desc="permuting",
+                        smoothing=0,
+                    )
+                )
         else:
-            output = [single_it(s) for s in tqdm(seeds, desc='permuting', smoothing=0)]
+            output = [single_it(s) for s in tqdm(seeds, desc="permuting", smoothing=0)]
         self.sigs = np.sum(np.asarray(output), axis=0) / float(nperm)
 
-    def eig_reg(self,alpha=0.05):
+    def eig_reg(self, alpha: float = 0.05) -> None:
         """
         Regresses eigentrends (batch effects) against the reduced dataset calculating p values for each row being associated with that trend.
 
@@ -464,20 +522,25 @@ class sva:
 
         alpha = float(alpha)
         U, s, V = np.linalg.svd(self.res)
-        sig = V.T[:,:len([i for i in itertools.takewhile(lambda x: x < alpha, self.sigs.copy())])]
+        sig = V.T[
+            :,
+            : len(
+                [i for i in itertools.takewhile(lambda x: x < alpha, self.sigs.copy())]
+            ),
+        ]
         pvals = []
-        if len(sig)>0:
+        if len(sig) > 0:
             for trend in tqdm(sig.T.copy()):
                 temp = []
                 for row in self.data_reduced.values.copy():
-                    slope, intercept, r_value, p_value, std_err = linregress(row,trend)
+                    slope, intercept, r_value, p_value, std_err = linregress(row, trend)
                     temp.append(p_value)
                 pvals.append(temp)
-            self.ps =  pvals
+            self.ps = pvals
         else:
-            print('No Significant Trends')
+            print("No Significant Trends")
 
-    def subset_svd(self,lam=0.5):
+    def subset_svd(self, lam: float = 0.5) -> None:
         """
         Performs SVD on the subset of rows associated with each batch effect.
 
@@ -500,7 +563,7 @@ class sva:
 
         """
 
-        def est_pi_naught(probs_naught,lam):
+        def est_pi_naught(probs_naught, lam):
             """
             Estimates background distribution of p values.
 
@@ -523,10 +586,12 @@ class sva:
 
             """
 
-            pi_naught = len([i for i in probs_naught if i > lam])/(len(probs_naught)*(1-lam))
+            pi_naught = len([i for i in probs_naught if i > lam]) / (
+                len(probs_naught) * (1 - lam)
+            )
             return pi_naught
 
-        def est_pi_sig(probs_sig,l):
+        def est_pi_sig(probs_sig, l):
             """
             Finds p value pi_sig as cutoff for rows associated with batch effect.
 
@@ -549,22 +614,22 @@ class sva:
 
             """
 
-            pi_0 = est_pi_naught(probs_sig,l)
+            pi_0 = est_pi_naught(probs_sig, l)
             if pi_0 > 1:
-                return 'nan'
+                return "nan"
             sp = np.sort(probs_sig)
-            pi_sig = sp[int(np.floor((1-pi_0)*len(probs_sig))-1)]
+            pi_sig = sp[int(np.floor((1 - pi_0) * len(probs_sig)) - 1)]
             return pi_sig
 
         pt, _, bt = np.linalg.svd(self.res)
-        trends = []
-        pep_trends = []
+        trends: list[np.ndarray] = []
+        pep_trends: list[np.ndarray] = []
         for j, entry in enumerate(tqdm(self.ps)):
             sub = []
-            thresh = est_pi_sig(entry,lam)
-            if thresh == 'nan':
-                self.ts = trends
-                self.pepts = pep_trends
+            thresh = est_pi_sig(entry, lam)
+            if thresh == "nan":
+                self.ts: list[np.ndarray] = trends
+                self.pepts: list[np.ndarray] = pep_trends
                 return
             for i in range(len(entry)):
                 if entry[i] < thresh:
@@ -573,15 +638,14 @@ class sva:
                 U, s, V = np.linalg.svd(sub)
                 temp = []
                 for trend in V:
-                    _, _, _, p_value, _ = linregress(bt[j],trend)
+                    _, _, _, p_value, _ = linregress(bt[j], trend)
                     temp.append(p_value)
-                trends.append(V.T[:,np.argmin(temp)])
-                pep_trends.append(pt[:,j])
+                trends.append(V.T[:, np.argmin(temp)])
+                pep_trends.append(pt[:, j])
         self.pepts = pep_trends
         self.ts = trends
 
-
-    def normalize(self,outname):
+    def normalize(self, outname: str) -> None:
         """
         Creates diagnostic files, normalizes data based on calculated batch effects, groups peptides by protein and outputs final processed dataset.
 
@@ -603,26 +667,40 @@ class sva:
         """
 
         from circ.io import write_expression, sidecar_path
-        write_expression(pd.DataFrame(self.ts, columns=self.data.columns), sidecar_path(outname, '_trends'))
-        write_expression(pd.DataFrame(self.sigs), sidecar_path(outname, '_perms'))
-        write_expression(pd.DataFrame(self.tks), sidecar_path(outname, '_tks'))
+
+        write_expression(
+            pd.DataFrame(self.ts, columns=self.data.columns),
+            sidecar_path(outname, "_trends"),
+        )
+        write_expression(pd.DataFrame(self.sigs), sidecar_path(outname, "_perms"))
+        write_expression(pd.DataFrame(self.tks), sidecar_path(outname, "_tks"))
         if len(self.pepts) > 0:
             write_expression(
                 pd.DataFrame(np.asarray(self.pepts).T, index=self.data_reduced.index),
-                sidecar_path(outname, '_pep_bias'),
+                sidecar_path(outname, "_pep_bias"),
             )
         if len(self.ts) > 0:
-            fin_res = np.dot(np.dot(self.data.values,np.linalg.lstsq(self.ts,np.identity(np.shape(self.ts)[0]),rcond=None)[0]),self.ts)
+            fin_res = np.dot(
+                np.dot(
+                    self.data.values,
+                    np.linalg.lstsq(
+                        self.ts, np.identity(np.shape(self.ts)[0]), rcond=None
+                    )[0],
+                ),
+                self.ts,
+            )
         else:
             fin_res = 0
         self.svd_norm = self.scaler.inverse_transform((self.data.values - fin_res).T).T
-        self.svd_norm = pd.DataFrame(self.svd_norm,index=self.data.index,columns=self.data.columns)
-        if self.data_type == 'p':
-            self.svd_norm = self.svd_norm.groupby(level='Protein').mean()
-        self.svd_norm.index.names = ['#']
+        self.svd_norm = pd.DataFrame(
+            self.svd_norm, index=self.data.index, columns=self.data.columns
+        )
+        if self.data_type == "p":
+            self.svd_norm = self.svd_norm.groupby(level="Protein").mean()
+        self.svd_norm.index.names = ["#"]
         write_expression(self.svd_norm, outname)
 
-    def preprocess_default(self):
+    def preprocess_default(self) -> None:
         self.pool_normalize()
         self.get_tpoints()
         self.prim_cor()
@@ -630,7 +708,7 @@ class sva:
         self.set_res()
         self.set_tks()
 
-    def output_default(self,out_file):
+    def output_default(self, out_file: str) -> None:
         self.eig_reg()
         self.subset_svd()
         self.normalize(out_file)

@@ -1,34 +1,38 @@
 """Expression classification integrating PIRS constitutiveness scores and BooteJTK rhythmicity."""
+
 import os
 import shutil
 import tempfile
 import types
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 _REF_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'bootjtk', 'ref_files')
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "bootjtk", "ref_files"
+    )
 )
 
 # (pirs_stable, rhythmic) -> label  — used when slope p-values are not available
 _LABEL_MAP = {
-    (True,  True):  'rhythmic',
-    (True,  False): 'constitutive',
-    (False, True):  'noisy_rhythmic',
-    (False, False): 'variable',
+    (True, True): "rhythmic",
+    (True, False): "constitutive",
+    (False, True): "noisy_rhythmic",
+    (False, False): "variable",
 }
 
 # (pirs_stable, sloped, rhythmic) -> label  — used when slope p-values are available
 _LABEL_MAP_SLOPE = {
-    (True,  False, True):  'rhythmic',
-    (True,  False, False): 'constitutive',
-    (True,  True,  True):  'rhythmic',
-    (True,  True,  False): 'linear',
-    (False, False, True):  'noisy_rhythmic',
-    (False, False, False): 'variable',
-    (False, True,  True):  'noisy_rhythmic',
-    (False, True,  False): 'linear',
+    (True, False, True): "rhythmic",
+    (True, False, False): "constitutive",
+    (True, True, True): "rhythmic",
+    (True, True, False): "linear",
+    (False, False, True): "noisy_rhythmic",
+    (False, False, False): "variable",
+    (False, True, True): "noisy_rhythmic",
+    (False, True, False): "linear",
 }
 
 
@@ -63,10 +67,18 @@ class Classifier:
         Parallel worker processes for BooteJTK.  0 = all CPUs (default 1).
     """
 
-    def __init__(self, source, *, anova=False, reps=2, size=50, workers=1):
+    def __init__(
+        self,
+        source: str | Path | pd.DataFrame,
+        *,
+        anova: bool = False,
+        reps: int = 2,
+        size: int = 50,
+        workers: int = 1,
+    ) -> None:
         if isinstance(source, pd.DataFrame):
             self._source = source
-            self.filename = None
+            self.filename: str | None = None
         else:
             self._source = os.path.abspath(str(source))
             self.filename = self._source
@@ -146,16 +158,16 @@ class Classifier:
         """
         from circ.bootjtk.pipeline import main as _pipeline_main
 
-        workdir = tempfile.mkdtemp(prefix='circ_classify_')
+        workdir = tempfile.mkdtemp(prefix="circ_classify_")
         try:
             if isinstance(self._source, pd.DataFrame):
-                fn_copy = os.path.join(workdir, 'input.txt')
-                self._source.to_csv(fn_copy, sep='\t')
+                fn_copy = os.path.join(workdir, "input.txt")
+                self._source.to_csv(fn_copy, sep="\t")
             else:
                 src = str(self._source)
-                if src.endswith('.parquet'):
-                    fn_copy = os.path.join(workdir, 'input.txt')
-                    pd.read_parquet(src).to_csv(fn_copy, sep='\t')
+                if src.endswith(".parquet"):
+                    fn_copy = os.path.join(workdir, "input.txt")
+                    pd.read_parquet(src).to_csv(fn_copy, sep="\t")
                 else:
                     fn_copy = os.path.join(workdir, os.path.basename(src))
                     shutil.copy2(src, fn_copy)
@@ -171,16 +183,14 @@ class Classifier:
 
             _pipeline_main(args)
 
-            calcp_files = [
-                f for f in os.listdir(workdir) if f.endswith('_GammaP.txt')
-            ]
+            calcp_files = [f for f in os.listdir(workdir) if f.endswith("_GammaP.txt")]
             if not calcp_files:
                 raise FileNotFoundError(
-                    'BooteJTK/CalcP produced no *_GammaP.txt output in the '
-                    f'working directory: {workdir}'
+                    "BooteJTK/CalcP produced no *_GammaP.txt output in the "
+                    f"working directory: {workdir}"
                 )
             result_path = os.path.join(workdir, calcp_files[0])
-            self.rhythm_results = pd.read_csv(result_path, sep='\t', index_col='ID')
+            self.rhythm_results = pd.read_csv(result_path, sep="\t", index_col="ID")
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 
@@ -244,47 +254,47 @@ class Classifier:
         if self.rhythm_results is None:
             raise RuntimeError("Call run_bootjtk() before classify().")
 
-        tau_col = 'TauMean' if 'TauMean' in self.rhythm_results.columns else 'Tau'
+        tau_col = "TauMean" if "TauMean" in self.rhythm_results.columns else "Tau"
 
         all_ids = self.pirs_scores.index.union(self.rhythm_results.index)
         result = pd.DataFrame(index=all_ids)
         result.index.name = self.pirs_scores.index.name
 
-        result['pirs_score'] = self.pirs_scores['score']
+        result["pirs_score"] = self.pirs_scores["score"]
 
-        for col in ('pval', 'pval_bh', 'slope_pval', 'slope_pval_bh'):
+        for col in ("pval", "pval_bh", "slope_pval", "slope_pval_bh"):
             if col in self.pirs_scores.columns:
                 result[col] = self.pirs_scores[col]
 
-        result['tau_mean'] = self.rhythm_results[tau_col]
+        result["tau_mean"] = self.rhythm_results[tau_col]
 
         for src_col, dst_col in [
-            ('GammaBH',     'emp_p'),
-            ('PeriodMean',  'period_mean'),
-            ('PhaseMean',   'phase_mean'),
-            ('TauStdDev',   'tau_std'),
-            ('PhaseStdDev', 'phase_std'),
-            ('NumBoots',    'n_boots'),
+            ("GammaBH", "emp_p"),
+            ("PeriodMean", "period_mean"),
+            ("PhaseMean", "phase_mean"),
+            ("TauStdDev", "tau_std"),
+            ("PhaseStdDev", "phase_std"),
+            ("NumBoots", "n_boots"),
         ]:
             if src_col in self.rhythm_results.columns:
                 result[dst_col] = self.rhythm_results[src_col]
 
-        pirs_cutoff = np.percentile(result['pirs_score'].dropna(), pirs_percentile)
-        stable = result['pirs_score'] <= pirs_cutoff
+        pirs_cutoff = np.percentile(result["pirs_score"].dropna(), pirs_percentile)
+        stable = result["pirs_score"] <= pirs_cutoff
 
-        rhythmic = result['tau_mean'] >= tau_threshold
-        if 'emp_p' in result.columns:
-            rhythmic = rhythmic & (result['emp_p'] <= emp_p_threshold)
+        rhythmic = result["tau_mean"] >= tau_threshold
+        if "emp_p" in result.columns:
+            rhythmic = rhythmic & (result["emp_p"] <= emp_p_threshold)
 
-        if 'slope_pval' in result.columns:
-            sloped = result['slope_pval'] <= slope_pval_threshold
-            result['label'] = [
-                _LABEL_MAP_SLOPE.get((bool(s), bool(sl), bool(r)), 'unclassified')
+        if "slope_pval" in result.columns:
+            sloped = result["slope_pval"] <= slope_pval_threshold
+            result["label"] = [
+                _LABEL_MAP_SLOPE.get((bool(s), bool(sl), bool(r)), "unclassified")
                 for s, sl, r in zip(stable, sloped, rhythmic)
             ]
         else:
-            result['label'] = [
-                _LABEL_MAP.get((bool(s), bool(r)), 'unclassified')
+            result["label"] = [
+                _LABEL_MAP.get((bool(s), bool(r)), "unclassified")
                 for s, r in zip(stable, rhythmic)
             ]
 
@@ -336,6 +346,7 @@ class Classifier:
 # Internal helpers
 # ------------------------------------------------------------------
 
+
 def _make_pipeline_args(
     *,
     filename: str,
@@ -348,18 +359,18 @@ def _make_pipeline_args(
     """Build the argparse-compatible namespace that pipeline.main() expects."""
     return types.SimpleNamespace(
         filename=filename,
-        means='DEFAULT',
-        sds='DEFAULT',
-        ns='DEFAULT',
-        prefix='classify',
-        waveform='cosine',
-        period=os.path.join(ref_dir, 'period24.txt'),
-        phase=os.path.join(ref_dir, 'phases_00-22_by2.txt'),
-        width=os.path.join(ref_dir, 'asymmetries_02-22_by2.txt'),
-        output='DEFAULT',
-        pickle='DEFAULT',
-        id_list='DEFAULT',
-        null_list='DEFAULT',
+        means="DEFAULT",
+        sds="DEFAULT",
+        ns="DEFAULT",
+        prefix="classify",
+        waveform="cosine",
+        period=os.path.join(ref_dir, "period24.txt"),
+        phase=os.path.join(ref_dir, "phases_00-22_by2.txt"),
+        width=os.path.join(ref_dir, "asymmetries_02-22_by2.txt"),
+        output="DEFAULT",
+        pickle="DEFAULT",
+        id_list="DEFAULT",
+        null_list="DEFAULT",
         size=size,
         reps=reps,
         workers=workers,
@@ -371,7 +382,7 @@ def _make_pipeline_args(
         rnaseq=False,
         harding=False,
         normal=False,
-        jtk='DEFAULT',
+        jtk="DEFAULT",
         fit=False,
-        null='DEFAULT',
+        null="DEFAULT",
     )

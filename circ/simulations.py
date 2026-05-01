@@ -64,22 +64,22 @@ class simulate:
 
     def __init__(
         self,
-        tpoints=24,
-        nrows=1000,
-        nreps=3,
-        tpoint_space=2,
-        pcirc=0.3,
-        plin=0.2,
-        phase_prop=0.5,
-        phase_noise=0.25,
-        amp_noise=0.75,
-        n_batch_effects=0,
-        pbatch=0.5,
-        effect_size=2.0,
-        p_miss=0.0,
-        lam_miss=5,
-        rseed=0,
-    ):
+        tpoints: int = 24,
+        nrows: int = 1000,
+        nreps: int = 3,
+        tpoint_space: int = 2,
+        pcirc: float = 0.3,
+        plin: float = 0.2,
+        phase_prop: float = 0.5,
+        phase_noise: float = 0.25,
+        amp_noise: float = 0.75,
+        n_batch_effects: int = 0,
+        pbatch: float = 0.5,
+        effect_size: float = 2.0,
+        p_miss: float = 0.0,
+        lam_miss: int = 5,
+        rseed: int = 0,
+    ) -> None:
         pconst = 1.0 - pcirc - plin
         if pconst < 0:
             raise ValueError("pcirc + plin must be <= 1.0")
@@ -158,12 +158,12 @@ class simulate:
     # ------------------------------------------------------------------
 
     @property
-    def circ(self):
+    def circ(self) -> np.ndarray:
         """int array, 1 where class == 'circadian'."""
         return (self.classes == "circadian").astype(int)
 
     @property
-    def const(self):
+    def const(self) -> np.ndarray:
         """int array, 1 where class == 'constitutive'."""
         return (self.classes == "constitutive").astype(int)
 
@@ -171,7 +171,7 @@ class simulate:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _true_classes_df(self, index=None):
+    def _true_classes_df(self, index: pd.Index | None = None) -> pd.DataFrame:
         df = pd.DataFrame(
             {
                 "Circadian": (self.classes == "circadian").astype(int),
@@ -187,7 +187,7 @@ class simulate:
     # Output methods
     # ------------------------------------------------------------------
 
-    def write_output(self, out_name="simulated_data.txt"):
+    def write_output(self, out_name: str = "simulated_data.txt") -> None:
         """Write expression-format output (gene / # index).
 
         Writes the scaled clean data to *out_name* and the per-row class
@@ -202,7 +202,7 @@ class simulate:
             stem + "_true_classes.txt", sep="\t"
         )
 
-    def write_proteomics(self, out_name="simulated_data"):
+    def write_proteomics(self, out_name: str = "simulated_data") -> None:
         """Write proteomics-format output (Peptide / Protein index).
 
         Writes three files:
@@ -239,17 +239,17 @@ class simulate:
         base_df.to_csv(out_name + "_baseline.txt", sep="\t")
 
         # True classes indexed by Protein
-        self._true_classes_df(
-            index=pd.Index(prots, name="Protein")
-        ).to_csv(out_name + "_true_classes.txt", sep="\t")
+        self._true_classes_df(index=pd.Index(prots, name="Protein")).to_csv(
+            out_name + "_true_classes.txt", sep="\t"
+        )
 
-    def generate_pool_map(self, out_name="pool_map"):
+    def generate_pool_map(self, out_name: str = "pool_map") -> None:
         """Write a pool map parquet file mapping every sample column to pool 1."""
         pd.DataFrame({"pool_number": {col: 1 for col in self.cols}}).to_parquet(
             out_name + ".parquet"
         )
 
-    def write_genorm(self, out_name="simulated_data_genorm.txt"):
+    def write_genorm(self, out_name: str = "simulated_data_genorm.txt") -> None:
         """Write geNorm-format output (Sample, Detector, Cq columns)."""
         df = pd.DataFrame(self.sim, columns=self.cols)
         df.index.name = "#"
@@ -259,27 +259,21 @@ class simulate:
         long["Sample"] = long["Sample"].apply(
             lambda x: "timepoint_" + str(x).split("_")[0]
         )
-        long["Detector"] = long["Detector"].astype(str).apply(
-            lambda x: "gene_" + x
-        )
+        long["Detector"] = long["Detector"].astype(str).apply(lambda x: "gene_" + x)
         long["Cq"] = (long["Cq"] - long["Cq"].min()) / (
             long["Cq"].max() - long["Cq"].min()
         )
         long.to_csv(out_name, sep=" ", index=False)
 
-    def write_normfinder(self, out_name="simulated_data_normfinder.txt"):
+    def write_normfinder(self, out_name: str = "simulated_data_normfinder.txt") -> None:
         """Write NormFinder-format output (Sample, Detector, Cq columns)."""
         df = pd.DataFrame(self.sim, columns=self.cols)
         df.index.name = "#"
         long = df.reset_index().melt(id_vars=["#"])
         long.columns = ["Detector", "Sample", "Cq"]
         long = long[["Sample", "Detector", "Cq"]]
-        long["Sample"] = long["Sample"].astype(str).apply(
-            lambda x: "timepoint_" + x
-        )
-        long["Detector"] = long["Detector"].astype(str).apply(
-            lambda x: "gene_" + x
-        )
+        long["Sample"] = long["Sample"].astype(str).apply(lambda x: "timepoint_" + x)
+        long["Detector"] = long["Detector"].astype(str).apply(lambda x: "gene_" + x)
         long["Cq"] = (long["Cq"] - long["Cq"].min()) / (
             long["Cq"].max() - long["Cq"].min()
         )

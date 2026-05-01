@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
+
 
 class imputable:
     """Imputes missing data with K Nearest Neighbors based on user specified parameters.
@@ -29,7 +32,12 @@ class imputable:
 
     """
 
-    def __init__(self, source, missingness, neighbors=10):
+    def __init__(
+        self,
+        source: str | Path | pd.DataFrame,
+        missingness: float,
+        neighbors: int = 10,
+    ) -> None:
         """
         Constructor, takes input data and missingness threshold and initializes imputable object.
 
@@ -40,20 +48,20 @@ class imputable:
             df = source.copy()
         else:
             path = str(source)
-            if path.endswith('.parquet'):
+            if path.endswith(".parquet"):
                 df = pd.read_parquet(path)
             else:
-                df = pd.read_csv(path, sep='\t')
+                df = pd.read_csv(path, sep="\t")
         # deduplicate() expects flat columns, not a MultiIndex
         if isinstance(df.index, pd.MultiIndex):
             df = df.reset_index()
         self.data = df
         self.miss = float(missingness)
-        self.pats = {}
+        self.pats: dict[str, list[int]] = {}
         self.notdone = True
         self.NN = neighbors
 
-    def deduplicate(self):
+    def deduplicate(self) -> None:
         """
         Removes duplicate peptides.
 
@@ -61,22 +69,26 @@ class imputable:
         Groups rows by peptide, if a peptide appears in more than one row it is removed.
 
         """
-        if (self.data[self.data.columns.values[1]][0][-2] == "T") & (self.data[self.data.columns.values[1]][0][-1].isdigit()):
-            self.data[self.data.columns.values[1]] = self.data[self.data.columns.values[1]].apply(lambda x: x.split('T')[0])
-        
-        self.data = self.data.groupby(['Peptide','Protein']).mean()
+        if (self.data[self.data.columns.values[1]][0][-2] == "T") & (
+            self.data[self.data.columns.values[1]][0][-1].isdigit()
+        ):
+            self.data[self.data.columns.values[1]] = self.data[
+                self.data.columns.values[1]
+            ].apply(lambda x: x.split("T")[0])
+
+        self.data = self.data.groupby(["Peptide", "Protein"]).mean()
         todrop = []
-        for name, group in tqdm(self.data.groupby(level='Peptide')):
+        for name, group in tqdm(self.data.groupby(level="Peptide")):
             if len(group) > 1:
                 todrop.append(name)
         self.data = self.data.drop(todrop)
 
-    def drop_missing(self):
+    def drop_missing(self) -> None:
         """Removes rows which are missing more data than the user specified missingness threshold."""
-        self.miss = np.rint(len(self.data.columns)*self.miss)
-        self.data = self.data[self.data.isnull().sum(axis=1)<=self.miss]
+        self.miss = np.rint(len(self.data.columns) * self.miss)
+        self.data = self.data[self.data.isnull().sum(axis=1) <= self.miss]
 
-    def impute(self,outname):
+    def impute(self, outname: str) -> None:
         """
         Imputes missing data with KNN and outputs the results to the specified file.
 
@@ -91,7 +103,7 @@ class imputable:
 
         """
 
-        def match_pat(l,i):
+        def match_pat(l, i):
             """
             finds all missingness patterns present in the dataset
 
@@ -117,49 +129,57 @@ class imputable:
         def get_patterns(arr):
             """Calls match_pat on all rows of data"""
             for ind, val in enumerate(arr):
-                match_pat(val,ind)
+                match_pat(val, ind)
 
-        def sub_imputer(inds,pattern,origarr,comparr):
+        def sub_imputer(inds, pattern, origarr, comparr):
             """
-            single imputation process for a missingness pattern.
+                        single imputation process for a missingness pattern.
 
 
-            Drops columns missing in a given missingness pattern. Then finds nearest neighbors.  Iterates over rows matching missingness pattern, getting indexes of nearest neighbors, averaging nearest neighbrs and replacing 
-missing values with corresponding averages.
+                        Drops columns missing in a given missingness pattern. Then finds nearest neighbors.  Iterates over rows matching missingness pattern, getting indexes of nearest neighbors, averaging nearest neighbrs and replacing
+            missing values with corresponding averages.
 
 
-            Parameters
-            ----------
-            inds : list
-                indexes of rows sharing the missingness pattern.
-            pattern : str
-                Binary representation of missingness pattern.
-            origarr : arr
-                original array of data with missing values
-            comparr : arr
-                Complete array of only rows with no missing values (complete cases).
+                        Parameters
+                        ----------
+                        inds : list
+                            indexes of rows sharing the missingness pattern.
+                        pattern : str
+                            Binary representation of missingness pattern.
+                        origarr : arr
+                            original array of data with missing values
+                        comparr : arr
+                            Complete array of only rows with no missing values (complete cases).
 
 
-            Returns
-            -------
-            outa : arr
-                Imputed array for missingness pattern.
+                        Returns
+                        -------
+                        outa : arr
+                            Imputed array for missingness pattern.
 
             """
 
-            #drop missing columns given missingness pattern
-            newarr = comparr[:,~np.array(list(pattern)).astype(int).astype(bool)]
-            #fit nearest neighbors
+            # drop missing columns given missingness pattern
+            newarr = comparr[:, ~np.array(list(pattern)).astype(int).astype(bool)]
+            # fit nearest neighbors
             nbrs = NearestNeighbors(n_neighbors=self.NN).fit(newarr)
             outa = []
-            #iterate over rows matching missingness pattern
+            # iterate over rows matching missingness pattern
             for rowind, row in enumerate(origarr[inds]):
                 outl = []
-                #get indexes of given rows nearest neighbors
-                indexes = nbrs.kneighbors([origarr[inds[rowind],~np.array(list(pattern)).astype(int).astype(bool)]],return_distance=False)
-                #get array of nearest neighbors
+                # get indexes of given rows nearest neighbors
+                indexes = nbrs.kneighbors(
+                    [
+                        origarr[
+                            inds[rowind],
+                            ~np.array(list(pattern)).astype(int).astype(bool),
+                        ]
+                    ],
+                    return_distance=False,
+                )
+                # get array of nearest neighbors
                 means = np.mean(comparr[indexes[0][1:]], axis=0)
-                #iterate over entries in each row
+                # iterate over entries in each row
                 for ind, v in enumerate(row):
                     if not np.isnan(v):
                         outl.append(v)
@@ -190,32 +210,35 @@ missing values with corresponding averages.
 
             outdict = {}
             for k in tqdm(self.pats.keys()):
-                temparr = sub_imputer(self.pats[k],k, origarr,comparr)
+                temparr = sub_imputer(self.pats[k], k, origarr, comparr)
                 for ind, v in enumerate(temparr):
                     outdict[self.pats[k][ind]] = v
             return outdict
 
         datavals = self.data.values
-        #generate array of complete cases
+        # generate array of complete cases
         comparr = datavals[~np.isnan(datavals).any(axis=1)]
 
-        #find missingness patterns
+        # find missingness patterns
         get_patterns(datavals)
 
-        #impute
+        # impute
         out = imputer(datavals, comparr)
 
-        #reform dataframe with imputed values from outdict
-        meld = pd.DataFrame.from_dict(out,orient='index')
+        # reform dataframe with imputed values from outdict
+        meld = pd.DataFrame.from_dict(out, orient="index")
         meld.index = meld.index.astype(float)
         meld.sort_index(inplace=True)
-        meld.set_index([self.data.index.get_level_values(0),self.data.index.get_level_values(1)], inplace=True)
+        meld.set_index(
+            [self.data.index.get_level_values(0), self.data.index.get_level_values(1)],
+            inplace=True,
+        )
         meld.columns = self.data.columns
         from circ.io import write_expression
+
         write_expression(meld, outname)
 
-    def impute_data(self,out_file):
+    def impute_data(self, out_file: str) -> None:
         self.deduplicate()
         self.drop_missing()
         self.impute(out_file)
-

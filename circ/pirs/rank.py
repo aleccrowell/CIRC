@@ -1,5 +1,9 @@
 import multiprocessing
-_mp_ctx = multiprocessing.get_context('forkserver')
+
+_mp_ctx = multiprocessing.get_context("forkserver")
+
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import numpy as np
@@ -12,7 +16,14 @@ from tqdm import tqdm
 # Module-level helpers (must be at top level for multiprocessing picklability)
 # ---------------------------------------------------------------------------
 
-def _pirs_score(y, X_pinv, X_obs, X_fine, dof):
+
+def _pirs_score(
+    y: np.ndarray,
+    X_pinv: np.ndarray,
+    X_obs: np.ndarray,
+    X_fine: np.ndarray,
+    dof: int,
+) -> float:
     """PIRS score for a single expression vector.
 
     score = max over fine grid of max(|PI_upper(t) - mean_expr|,
@@ -33,7 +44,7 @@ def _pirs_score(y, X_pinv, X_obs, X_fine, dof):
     """
     n = len(y)
     beta = X_pinv @ y
-    y_hat_obs  = X_obs  @ beta
+    y_hat_obs = X_obs @ beta
     y_hat_fine = X_fine @ beta
 
     mean_expr = np.mean(y)
@@ -44,12 +55,15 @@ def _pirs_score(y, X_pinv, X_obs, X_fine, dof):
     s = np.sqrt(max(rss, 1e-28) / df_resid)
     t_crit = t_dist.ppf(0.975, df_resid)
 
-    x_obs  = X_obs[:, 1]
+    x_obs = X_obs[:, 1]
     x_fine = X_fine[:, 1]
     x_mean = np.mean(x_obs)
     Sxx = np.sum((x_obs - x_mean) ** 2)
-    lev = (1.0 + 1.0 / n + (x_fine - x_mean) ** 2 / Sxx
-           if Sxx > 1e-14 else np.full(len(x_fine), 1.0 + 1.0 / n))
+    lev = (
+        1.0 + 1.0 / n + (x_fine - x_mean) ** 2 / Sxx
+        if Sxx > 1e-14
+        else np.full(len(x_fine), 1.0 + 1.0 / n)
+    )
 
     pi_half = t_crit * s * np.sqrt(lev)
     upper = y_hat_fine + pi_half
@@ -59,7 +73,11 @@ def _pirs_score(y, X_pinv, X_obs, X_fine, dof):
     return float(max_dev / denom)
 
 
-def _permutation_worker(args):
+def _permutation_worker(
+    args: tuple[
+        Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, float, int, int
+    ],
+) -> tuple[Any, float]:
     """Multiprocessing worker: permute y n_permutations times, return p-value.
 
     Uses a left-tail test: counts how many permuted PIRS scores are <= the
@@ -81,7 +99,11 @@ def _permutation_worker(args):
     return gene_id, (count_le + 1) / (n_perm + 1)
 
 
-def _slope_score(y, X_pinv, X_fine):
+def _slope_score(
+    y: np.ndarray,
+    X_pinv: np.ndarray,
+    X_fine: np.ndarray,
+) -> float:
     """Slope-only score: max regression trend deviation from mean, normalized by mean.
 
     score = max(|ŷ_fine(t) − mean_expr|) / |mean_expr|
@@ -97,7 +119,9 @@ def _slope_score(y, X_pinv, X_fine):
     return float(np.max(np.abs(y_hat_fine - mean_expr)) / denom)
 
 
-def _slope_permutation_worker(args):
+def _slope_permutation_worker(
+    args: tuple[Any, np.ndarray, np.ndarray, np.ndarray, float, int, int],
+) -> tuple[Any, float]:
     """Multiprocessing worker for the slope permutation test.
 
     Right-tail test: counts how many permuted slope scores are >= the observed
@@ -119,6 +143,7 @@ def _slope_permutation_worker(args):
 # ---------------------------------------------------------------------------
 # ranker
 # ---------------------------------------------------------------------------
+
 
 class ranker:
     """Ranks and sorts expression profiles from most to least constitutive.
@@ -145,20 +170,23 @@ class ranker:
                           calculate_scores() / calculate_pvals()
     """
 
-    def __init__(self, source, anova=True):
+    def __init__(self, source: str | Path | pd.DataFrame, anova: bool = True) -> None:
         from circ.io import read_expression
+
         self.data = read_expression(source)
         self.data = self.data[(self.data.T != 0).any()]
         self.anova = anova
-        self.errors = None
+        self.errors: pd.DataFrame | None = None
 
-    def get_tpoints(self):
+    def get_tpoints(self) -> None:
         """Extract numeric timepoints from column headers (ZT/CT prefix)."""
-        tpoints = [i.replace('ZT', '').replace('CT', '') for i in self.data.columns.values]
-        tpoints = [int(i.split('_')[0]) for i in tpoints]
+        tpoints = [
+            i.replace("ZT", "").replace("CT", "") for i in self.data.columns.values
+        ]
+        tpoints = [int(i.split("_")[0]) for i in tpoints]
         self.tpoints = np.asarray(tpoints)
 
-    def remove_anova(self, alpha=0.05):
+    def remove_anova(self, alpha: float = 0.05) -> None:
         """Remove profiles with significant differential expression (one-way ANOVA).
 
         Parameters
@@ -170,13 +198,15 @@ class ranker:
         for index, row in self.data.iterrows():
             vals = []
             for i in list(set(self.tpoints)):
-                vals.append([row.values[j] for j in range(len(row)) if self.tpoints[j] == i])
+                vals.append(
+                    [row.values[j] for j in range(len(row)) if self.tpoints[j] == i]
+                )
             f_val, p_val = f_oneway(*vals)
             if p_val < alpha:
                 to_remove.append(index)
         self.data = self.data[~self.data.index.isin(to_remove)]
 
-    def calculate_scores(self):
+    def calculate_scores(self) -> pd.DataFrame:
         """Compute PIRS scores for every expression profile.
 
         score = max over fine grid of max(|PI_upper(t) - mean_expr|,
@@ -192,12 +222,12 @@ class ranker:
             Index = gene IDs, column ``score``, sorted ascending.
         """
         tpoints = self.tpoints
-        dof     = len(np.unique(tpoints))
-        x_fine  = np.arange(min(tpoints), max(tpoints), 0.1)
+        dof = len(np.unique(tpoints))
+        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
 
         # Pre-compute design matrices — shared across all genes
-        X_obs    = np.column_stack([np.ones(len(tpoints)), tpoints])
-        X_pinv   = np.linalg.pinv(X_obs)
+        X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
+        X_pinv = np.linalg.pinv(X_obs)
         X_fine_m = np.column_stack([np.ones(len(x_fine)), x_fine])
 
         es = {}
@@ -205,13 +235,15 @@ class ranker:
             y = np.array(self.data.iloc[index], dtype=float)
             es[index] = _pirs_score(y, X_pinv, X_obs, X_fine_m, dof)
 
-        self.errors = pd.DataFrame.from_dict(es, orient='index')
-        self.errors.columns = ['score']
+        self.errors = pd.DataFrame.from_dict(es, orient="index")
+        self.errors.columns = ["score"]
         self.errors.index = self.data.index
-        self.errors.sort_values('score', inplace=True)
+        self.errors.sort_values("score", inplace=True)
         return self.errors
 
-    def calculate_pvals(self, n_permutations=1000, n_jobs=1):
+    def calculate_pvals(
+        self, n_permutations: int = 1000, n_jobs: int = 1
+    ) -> pd.DataFrame:
         """Compute permutation p-values for PIRS scores.
 
         For each gene, shuffles the expression values ``n_permutations``
@@ -242,21 +274,26 @@ class ranker:
             raise RuntimeError("Call calculate_scores() before calculate_pvals().")
 
         tpoints = self.tpoints
-        dof     = len(np.unique(tpoints))
-        x_fine  = np.arange(min(tpoints), max(tpoints), 0.1)
+        dof = len(np.unique(tpoints))
+        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
 
-        X_obs    = np.column_stack([np.ones(len(tpoints)), tpoints])
-        X_pinv   = np.linalg.pinv(X_obs)
+        X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
+        X_pinv = np.linalg.pinv(X_obs)
         X_fine_m = np.column_stack([np.ones(len(x_fine)), x_fine])
 
         # Build one arg-tuple per gene; seed is fixed per gene for reproducibility
         gene_args = [
-            (gene_id,
-             np.array(self.data.loc[gene_id], dtype=float),
-             X_pinv, X_obs, X_fine_m, dof,
-             float(self.errors.loc[gene_id, 'score']),
-             n_permutations,
-             i)
+            (
+                gene_id,
+                np.array(self.data.loc[gene_id], dtype=float),
+                X_pinv,
+                X_obs,
+                X_fine_m,
+                dof,
+                float(self.errors.loc[gene_id, "score"]),
+                n_permutations,
+                i,
+            )
             for i, gene_id in enumerate(self.errors.index)
         ]
 
@@ -264,26 +301,30 @@ class ranker:
             results = [_permutation_worker(a) for a in tqdm(gene_args)]
         else:
             pool_size = n_jobs if n_jobs > 0 else None
-            actual    = pool_size or multiprocessing.cpu_count()
+            actual = pool_size or multiprocessing.cpu_count()
             chunksize = max(1, len(gene_args) // (actual * 4))
             with _mp_ctx.Pool(pool_size) as pool:
-                results = list(tqdm(
-                    pool.imap(_permutation_worker, gene_args, chunksize=chunksize),
-                    total=len(gene_args),
-                ))
+                results = list(
+                    tqdm(
+                        pool.imap(_permutation_worker, gene_args, chunksize=chunksize),
+                        total=len(gene_args),
+                    )
+                )
 
         pvals = pd.Series(
             {gid: pval for gid, pval in results},
-            name='pval',
+            name="pval",
         ).reindex(self.errors.index)
 
-        _, pvals_bh, _, _ = ssm.multipletests(pvals.values, method='fdr_bh')
+        _, pvals_bh, _, _ = ssm.multipletests(pvals.values, method="fdr_bh")
 
-        self.errors['pval']    = pvals.values
-        self.errors['pval_bh'] = pvals_bh
+        self.errors["pval"] = pvals.values
+        self.errors["pval_bh"] = pvals_bh
         return self.errors
 
-    def calculate_slope_pvals(self, n_permutations=1000, n_jobs=1):
+    def calculate_slope_pvals(
+        self, n_permutations: int = 1000, n_jobs: int = 1
+    ) -> pd.DataFrame:
         """Compute permutation p-values for the slope component of expression.
 
         For each gene, shuffles expression values ``n_permutations`` times and
@@ -311,22 +352,29 @@ class ranker:
             ``slope_pval_bh``.
         """
         if self.errors is None:
-            raise RuntimeError("Call calculate_scores() before calculate_slope_pvals().")
+            raise RuntimeError(
+                "Call calculate_scores() before calculate_slope_pvals()."
+            )
 
         tpoints = self.tpoints
-        x_fine  = np.arange(min(tpoints), max(tpoints), 0.1)
+        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
 
-        X_obs    = np.column_stack([np.ones(len(tpoints)), tpoints])
-        X_pinv   = np.linalg.pinv(X_obs)
+        X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
+        X_pinv = np.linalg.pinv(X_obs)
         X_fine_m = np.column_stack([np.ones(len(x_fine)), x_fine])
 
         gene_args = [
-            (gene_id,
-             np.array(self.data.loc[gene_id], dtype=float),
-             X_pinv, X_fine_m,
-             _slope_score(np.array(self.data.loc[gene_id], dtype=float), X_pinv, X_fine_m),
-             n_permutations,
-             i)
+            (
+                gene_id,
+                np.array(self.data.loc[gene_id], dtype=float),
+                X_pinv,
+                X_fine_m,
+                _slope_score(
+                    np.array(self.data.loc[gene_id], dtype=float), X_pinv, X_fine_m
+                ),
+                n_permutations,
+                i,
+            )
             for i, gene_id in enumerate(self.errors.index)
         ]
 
@@ -334,27 +382,37 @@ class ranker:
             results = [_slope_permutation_worker(a) for a in tqdm(gene_args)]
         else:
             pool_size = n_jobs if n_jobs > 0 else None
-            actual    = pool_size or multiprocessing.cpu_count()
+            actual = pool_size or multiprocessing.cpu_count()
             chunksize = max(1, len(gene_args) // (actual * 4))
             with _mp_ctx.Pool(pool_size) as pool:
-                results = list(tqdm(
-                    pool.imap(_slope_permutation_worker, gene_args, chunksize=chunksize),
-                    total=len(gene_args),
-                ))
+                results = list(
+                    tqdm(
+                        pool.imap(
+                            _slope_permutation_worker, gene_args, chunksize=chunksize
+                        ),
+                        total=len(gene_args),
+                    )
+                )
 
         pvals = pd.Series(
             {gid: pval for gid, pval in results},
-            name='slope_pval',
+            name="slope_pval",
         ).reindex(self.errors.index)
 
-        _, pvals_bh, _, _ = ssm.multipletests(pvals.values, method='fdr_bh')
+        _, pvals_bh, _, _ = ssm.multipletests(pvals.values, method="fdr_bh")
 
-        self.errors['slope_pval']    = pvals.values
-        self.errors['slope_pval_bh'] = pvals_bh
+        self.errors["slope_pval"] = pvals.values
+        self.errors["slope_pval_bh"] = pvals_bh
         return self.errors
 
-    def pirs_sort(self, outname=False, pvals=False, slope_pvals=False,
-                  n_permutations=1000, n_jobs=1):
+    def pirs_sort(
+        self,
+        outname: str | None = None,
+        pvals: bool = False,
+        slope_pvals: bool = False,
+        n_permutations: int = 1000,
+        n_jobs: int = 1,
+    ) -> pd.DataFrame:
         """Run the full PIRS pipeline and return data sorted by score.
 
         Parameters
@@ -387,9 +445,11 @@ class ranker:
             self.calculate_pvals(n_permutations=n_permutations, n_jobs=n_jobs)
         if slope_pvals:
             self.calculate_slope_pvals(n_permutations=n_permutations, n_jobs=n_jobs)
+        assert self.errors is not None
         sorted_data = self.data.loc[self.errors.index.values]
-        if outname:
+        if outname is not None:
             from circ.io import write_expression
+
             write_expression(self.errors, outname)
         return sorted_data
 
@@ -397,6 +457,7 @@ class ranker:
 # ---------------------------------------------------------------------------
 # rsd_ranker  (unchanged — benchmarking baseline)
 # ---------------------------------------------------------------------------
+
 
 class rsd_ranker:
     """Ranks profiles by Relative Standard Deviation (benchmarking baseline).
@@ -411,20 +472,25 @@ class rsd_ranker:
     data : DataFrame
     """
 
-    def __init__(self, source):
+    def __init__(self, source: str | Path | pd.DataFrame) -> None:
         from circ.io import read_expression
+
         self.data = read_expression(source)
         self.data = self.data[(self.data.T != 0).any()]
 
-    def calculate_scores(self):
+    def calculate_scores(self) -> pd.DataFrame:
         """Compute RSD scores (sorted ascending)."""
-        rsd = (1 + (1 / (4 * len(self.data)))) * np.std(self.data.values, axis=1) / np.abs(np.mean(self.data.values, axis=1))
+        rsd = (
+            (1 + (1 / (4 * len(self.data))))
+            * np.std(self.data.values, axis=1)
+            / np.abs(np.mean(self.data.values, axis=1))
+        )
         self.rsd = pd.DataFrame(rsd, index=self.data.index)
-        self.rsd.columns = ['score']
-        self.rsd.sort_values('score', inplace=True)
+        self.rsd.columns = ["score"]
+        self.rsd.sort_values("score", inplace=True)
         return self.rsd
 
-    def rsd_sort(self, outname=False):
+    def rsd_sort(self, outname: str | None = None) -> pd.DataFrame:
         """Run pipeline and return data sorted by RSD.
 
         Parameters
@@ -438,7 +504,8 @@ class rsd_ranker:
         """
         self.calculate_scores()
         sorted_data = self.data.loc[self.rsd.index.values]
-        if outname:
+        if outname is not None:
             from circ.io import write_expression
+
             write_expression(self.rsd, outname)
         return sorted_data
