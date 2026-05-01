@@ -19,10 +19,10 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 if "--show" not in sys.argv:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from circ.simulations import simulate
@@ -42,11 +42,14 @@ FIGURES.mkdir(exist_ok=True)
 
 print("Simulating data …")
 sim = simulate(
-    tpoints=8, nrows=300, nreps=2,
-    pcirc=0.25, plin=0.15,
+    tpoints=8,
+    nrows=300,
+    nreps=2,
+    pcirc=0.25,
+    plin=0.15,
     rseed=42,
 )
-gene_ids  = [f"gene_{i:04d}" for i in range(sim.nrows)]
+gene_ids = [f"gene_{i:04d}" for i in range(sim.nrows)]
 expression = pd.DataFrame(sim.sim, index=gene_ids, columns=sim.cols)
 expression.index.name = "#"
 
@@ -64,9 +67,10 @@ print()
 # ---------------------------------------------------------------------------
 # 2. Overview — what did my experiment produce?
 #
-# These three plots answer the first question after any classification run:
-# how are my genes distributed, how do the PIRS scores separate, and does
-# the mean time-series profile for each label look biologically sensible?
+# These four plots answer the first question after any classification run:
+# how are my genes distributed, how do the PIRS scores separate, does the
+# mean time-series profile for each label look biologically sensible, and
+# what does the full expression landscape look like across all labels?
 # ---------------------------------------------------------------------------
 print("Group 1: Overview …")
 
@@ -81,6 +85,19 @@ viz.mean_expression_profiles(expression, result, ax=axes[2])
 
 plt.tight_layout()
 out = FIGURES / "01_overview.png"
+fig.savefig(out, dpi=150, bbox_inches="tight")
+plt.close(fig)
+print(f"  saved → {out}")
+
+# Clustered expression heatmap — shows the most representative genes per
+# label sorted within each group by hierarchical clustering.  The color
+# strip on the left encodes the expression label.
+print("Group 1b: Expression heatmap …")
+
+fig, ax = plt.subplots(figsize=(8, 7))
+viz.expression_heatmap(expression, result, n_per_label=15, ax=ax)
+plt.tight_layout()
+out = FIGURES / "01b_expression_heatmap.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  saved → {out}")

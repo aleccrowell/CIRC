@@ -499,6 +499,185 @@ def phase_amplitude_scatter(
     return fig
 
 
+def expression_heatmap(
+    expression,
+    classifications=None,
+    labels=None,
+    n_per_label=20,
+    z_score=True,
+    method="ward",
+    title="Expression heatmap",
+):
+    """Interactive clustered heatmap of gene expression grouped by label.
+
+    Hover over any cell to see the gene ID, timepoint, and z-score value.
+    Genes are subsampled per label, z-scored, and sorted by within-group
+    hierarchical clustering.  A label color annotation trace is drawn on
+    the right y-axis.
+
+    Parameters
+    ----------
+    expression : pd.DataFrame
+        Expression matrix with ZT/CT-prefixed sample columns.
+    classifications : pd.DataFrame, optional
+        Output of ``Classifier.classify()``.
+    labels : list of str, optional
+    n_per_label : int
+        Maximum genes per label (default 20).
+    z_score : bool
+        Z-score each gene before plotting (default True).
+    method : str
+        Linkage method for clustering (default ``'ward'``).
+    title : str, optional
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    from circ.visualization.classify import (
+        _zt_timepoints,
+        _LABEL_ORDER,
+        _LABEL_SELECT_COL,
+        LABEL_COLORS,
+    )
+    from scipy.cluster.hierarchy import linkage, leaves_list
+
+    zt_cols, timepoints, unique_tp = _zt_timepoints(expression)
+
+    tp_mat = np.array(
+        [
+            expression[[c for c, t in zip(zt_cols, timepoints) if t == tp]]
+            .mean(axis=1)
+            .values
+            for tp in unique_tp
+        ]
+    ).T  # shape (n_genes, n_tp)
+    gene_index = expression.index.tolist()
+
+    if classifications is not None:
+        common = [g for g in gene_index if g in classifications.index]
+        clf = classifications.loc[common]
+        mat_sub = tp_mat[[gene_index.index(g) for g in common], :]
+        gene_index = common
+
+        if labels is None:
+            labels = [l for l in _LABEL_ORDER if l in clf["label"].values]
+
+        ordered_genes: list = []
+        gene_label_list: list = []
+
+        for lbl in labels:
+            genes = clf[clf["label"] == lbl].index.tolist()
+            if not genes:
+                continue
+            n = min(n_per_label, len(genes))
+            col, ascending = _LABEL_SELECT_COL.get(lbl, ("pirs_score", True))
+            if col and col in clf.columns and clf[col].notna().any():
+                ranked = clf.loc[genes, col].dropna()
+                genes = (
+                    ranked.nsmallest(n) if ascending else ranked.nlargest(n)
+                ).index.tolist()
+            else:
+                genes = genes[:n]
+
+            idx_in_sub = [common.index(g) for g in genes]
+            sub = mat_sub[idx_in_sub, :]
+            if len(sub) > 2:
+                order = leaves_list(linkage(sub, method=method))
+                genes = [genes[i] for i in order]
+
+            ordered_genes.extend(genes)
+            gene_label_list.extend([lbl] * len(genes))
+
+        final_idx = [common.index(g) for g in ordered_genes]
+        mat = mat_sub[final_idx, :]
+    else:
+        max_genes = n_per_label * len(_LABEL_ORDER)
+        if len(gene_index) > max_genes:
+            step = max(1, len(gene_index) // max_genes)
+            gene_index = gene_index[::step][:max_genes]
+            tp_mat = tp_mat[[expression.index.tolist().index(g) for g in gene_index], :]
+        if len(gene_index) > 2:
+            order = leaves_list(linkage(tp_mat.astype(float), method=method))
+            gene_index = [gene_index[i] for i in order]
+            tp_mat = tp_mat[order, :]
+        ordered_genes = gene_index
+        gene_label_list = None
+        mat = tp_mat
+
+    mat = mat.astype(float)
+
+    if z_score:
+        row_mean = mat.mean(axis=1, keepdims=True)
+        row_std = mat.std(axis=1, keepdims=True)
+        row_std[row_std == 0] = 1.0
+        mat = (mat - row_mean) / row_std
+
+    vmax = float(np.percentile(np.abs(mat), 99))
+    vmax = max(vmax, 0.5)
+
+    x_labels = [f"ZT{int(tp):02d}" for tp in unique_tp]
+
+    # Build hover text matrix
+    hover = np.array(
+        [
+            [
+                f"<b>{gene}</b><br>ZT: {x_labels[j]}<br>z-score: {mat[i, j]:.2f}"
+                for j in range(mat.shape[1])
+            ]
+            for i, gene in enumerate(ordered_genes)
+        ]
+    )
+
+    fig = go.Figure(
+        go.Heatmap(
+            z=mat,
+            x=x_labels,
+            y=ordered_genes,
+            colorscale="RdBu",
+            reversescale=True,
+            zmin=-vmax,
+            zmax=vmax,
+            text=hover,
+            hovertemplate="%{text}<extra></extra>",
+            colorbar=dict(title="z-score" if z_score else "expression"),
+        )
+    )
+
+    # Label color annotation traces on the right y-axis (as a thin bar)
+    if gene_label_list is not None:
+        fig.update_layout(
+            yaxis2=dict(overlaying="y", side="right", showticklabels=False)
+        )
+        for lbl in labels or []:
+            idxs = [i for i, l in enumerate(gene_label_list) if l == lbl]
+            if not idxs:
+                continue
+            fig.add_trace(
+                go.Bar(
+                    x=[0.5] * len(idxs),
+                    y=[ordered_genes[i] for i in idxs],
+                    orientation="h",
+                    name=lbl,
+                    marker_color=LABEL_COLORS.get(lbl, "#8C8C8C"),
+                    width=0.9,
+                    yaxis="y2",
+                    showlegend=True,
+                    hovertemplate=f"label: {lbl}<extra></extra>",
+                    visible=True,
+                )
+            )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Timepoint",
+        yaxis_title="Gene",
+        yaxis=dict(autorange="reversed"),
+        height=max(400, len(ordered_genes) * 14 + 100),
+    )
+    return fig
+
+
 def top_constitutive_candidates(
     classifications,
     n_top=20,

@@ -52,6 +52,8 @@ from circ.visualization.classify import (
     phase_amplitude_scatter,
     top_constitutive_candidates,
     mean_expression_profiles,
+    gene_profile,
+    expression_heatmap,
     threshold_sensitivity,
     classification_summary,
 )
@@ -86,6 +88,8 @@ __all__ = [
     "phase_amplitude_scatter",
     "top_constitutive_candidates",
     "mean_expression_profiles",
+    "gene_profile",
+    "expression_heatmap",
     "threshold_sensitivity",
     "classification_summary",
     # compare

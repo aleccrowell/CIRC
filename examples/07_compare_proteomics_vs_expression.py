@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 if "--show" not in sys.argv:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -67,37 +68,55 @@ LAYER_LABELS = ("Proteomics", "RNA-seq")
 # ---------------------------------------------------------------------------
 print("Simulating multi-omic datasets …")
 
-sim_core_prot      = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=20, amp_noise=0.35)
-sim_core_rna       = simulate(tpoints=8, nrows=40,  nreps=2, pcirc=1.0, plin=0.0, rseed=21, amp_noise=0.35)
-sim_prot_only_rhy  = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=22, amp_noise=0.35)
-sim_prot_only_flat = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=0.0, plin=0.0, rseed=26)
-sim_rna_only_flat  = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=0.0, plin=0.0, rseed=27)
-sim_rna_only_rhy   = simulate(tpoints=8, nrows=20,  nreps=2, pcirc=1.0, plin=0.0, rseed=23, amp_noise=0.35)
-sim_bg_prot        = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=24)
-sim_bg_rna         = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=25)
+sim_core_prot = simulate(
+    tpoints=8, nrows=40, nreps=2, pcirc=1.0, plin=0.0, rseed=20, amp_noise=0.35
+)
+sim_core_rna = simulate(
+    tpoints=8, nrows=40, nreps=2, pcirc=1.0, plin=0.0, rseed=21, amp_noise=0.35
+)
+sim_prot_only_rhy = simulate(
+    tpoints=8, nrows=20, nreps=2, pcirc=1.0, plin=0.0, rseed=22, amp_noise=0.35
+)
+sim_prot_only_flat = simulate(
+    tpoints=8, nrows=20, nreps=2, pcirc=0.0, plin=0.0, rseed=26
+)
+sim_rna_only_flat = simulate(
+    tpoints=8, nrows=20, nreps=2, pcirc=0.0, plin=0.0, rseed=27
+)
+sim_rna_only_rhy = simulate(
+    tpoints=8, nrows=20, nreps=2, pcirc=1.0, plin=0.0, rseed=23, amp_noise=0.35
+)
+sim_bg_prot = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=24)
+sim_bg_rna = simulate(tpoints=8, nrows=120, nreps=2, pcirc=0.0, plin=0.05, rseed=25)
 
 feature_ids = [f"feat_{i:04d}" for i in range(200)]
 cols = sim_core_prot.cols
 
 prot_expr = pd.DataFrame(
-    np.vstack([
-        sim_core_prot.sim,       # feat_0000–0039: rhythmic in both
-        sim_prot_only_rhy.sim,   # feat_0040–0059: prot-only rhythmic
-        sim_rna_only_flat.sim,   # feat_0060–0079: non-rhythmic at protein level
-        sim_bg_prot.sim,         # feat_0080–0199: background
-    ]),
-    index=feature_ids, columns=cols,
+    np.vstack(
+        [
+            sim_core_prot.sim,  # feat_0000–0039: rhythmic in both
+            sim_prot_only_rhy.sim,  # feat_0040–0059: prot-only rhythmic
+            sim_rna_only_flat.sim,  # feat_0060–0079: non-rhythmic at protein level
+            sim_bg_prot.sim,  # feat_0080–0199: background
+        ]
+    ),
+    index=feature_ids,
+    columns=cols,
 )
 prot_expr.index.name = "#"
 
 rna_expr = pd.DataFrame(
-    np.vstack([
-        sim_core_rna.sim,        # feat_0000–0039: rhythmic in both
-        sim_prot_only_flat.sim,  # feat_0040–0059: non-rhythmic in RNA
-        sim_rna_only_rhy.sim,    # feat_0060–0079: rna-only rhythmic
-        sim_bg_rna.sim,          # feat_0080–0199: background
-    ]),
-    index=feature_ids, columns=cols,
+    np.vstack(
+        [
+            sim_core_rna.sim,  # feat_0000–0039: rhythmic in both
+            sim_prot_only_flat.sim,  # feat_0040–0059: non-rhythmic in RNA
+            sim_rna_only_rhy.sim,  # feat_0060–0079: rna-only rhythmic
+            sim_bg_rna.sim,  # feat_0080–0199: background
+        ]
+    ),
+    index=feature_ids,
+    columns=cols,
 )
 rna_expr.index.name = "#"
 
@@ -105,11 +124,13 @@ rna_expr.index.name = "#"
 # 2. Classify each molecular layer independently
 # ---------------------------------------------------------------------------
 print("Classifying proteomics layer …")
-clf_prot    = Classifier(prot_expr, reps=2)
-result_prot = clf_prot.run_all(pvals=True, slope_pvals=True, n_permutations=200, n_jobs=1)
+clf_prot = Classifier(prot_expr, reps=2)
+result_prot = clf_prot.run_all(
+    pvals=True, slope_pvals=True, n_permutations=200, n_jobs=1
+)
 
 print("Classifying RNA-seq layer …")
-clf_rna    = Classifier(rna_expr, reps=2)
+clf_rna = Classifier(rna_expr, reps=2)
 result_rna = clf_rna.run_all(pvals=True, slope_pvals=True, n_permutations=200, n_jobs=1)
 
 print("\nProteomics labels:")
@@ -122,12 +143,16 @@ print(result_rna["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 print("Section 1: Per-layer label distributions …")
 
+xmax = (
+    max(
+        result_prot["label"].value_counts().max(),
+        result_rna["label"].value_counts().max(),
+    )
+    * 1.15
+)
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
-viz.label_distribution(result_prot, ax=axes[0], title=LAYER_LABELS[0])
-viz.label_distribution(result_rna,  ax=axes[1], title=LAYER_LABELS[1])
-xmax = max(axes[0].get_xlim()[1], axes[1].get_xlim()[1])
-for ax in axes:
-    ax.set_xlim(0, xmax)
+viz.label_distribution(result_prot, ax=axes[0], title=LAYER_LABELS[0], xlim=xmax)
+viz.label_distribution(result_rna, ax=axes[1], title=LAYER_LABELS[1], xlim=xmax)
 plt.tight_layout()
 out = FIGURES / "31_layer_label_distributions.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -154,8 +179,10 @@ print(comparison["rhythmicity_status"].value_counts().to_string())
 print("\nLabel transition table (proteomics → RNA-seq):")
 print(label_change_table(comparison).to_string())
 
-sig_tau   = comparison["tau_padj"].lt(0.05).sum()
-sig_phase = comparison["phase_padj"].lt(0.05).sum() if "phase_padj" in comparison.columns else 0
+sig_tau = comparison["tau_padj"].lt(0.05).sum()
+sig_phase = (
+    comparison["phase_padj"].lt(0.05).sum() if "phase_padj" in comparison.columns else 0
+)
 print(f"\nSignificant τ changes   (tau_padj  < 0.05): {sig_tau}")
 print(f"Significant phase shifts (phase_padj < 0.05): {sig_phase}\n")
 
@@ -172,15 +199,23 @@ print(f"  saved → {FIGURES / '32_cross_layer_summary.png'}")
 print("Section 3: Divergent features …")
 
 prot_only = comparison[comparison["rhythmicity_status"] == "lost"]
-rna_only  = comparison[comparison["rhythmicity_status"] == "gained"]
+rna_only = comparison[comparison["rhythmicity_status"] == "gained"]
 
 print(f"\n  Rhythmic at protein level only ({len(prot_only)} features):")
 if not prot_only.empty:
-    print(prot_only[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]].head(5).to_string())
+    print(
+        prot_only[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]]
+        .head(5)
+        .to_string()
+    )
 
 print(f"\n  Rhythmic at mRNA level only ({len(rna_only)} features):")
 if not rna_only.empty:
-    print(rna_only[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]].head(5).to_string())
+    print(
+        rna_only[["tau_mean_A", "tau_mean_B", "delta_tau", "tau_padj"]]
+        .head(5)
+        .to_string()
+    )
 
 fig, ax = plt.subplots(figsize=(5, 5))
 viz.rhythmicity_shift_scatter(comparison, ax=ax)
@@ -220,7 +255,7 @@ for col in ("tau_mean", "pirs_score"):
     peptide_result[col] = (peptide_result[col].values + noise).clip(min=0)
 
 prot_ids = peptide_result.index
-pep_ids  = [f"pep_{i:04d}" for i in range(len(peptide_result))]
+pep_ids = [f"pep_{i:04d}" for i in range(len(peptide_result))]
 peptide_result.index = pd.MultiIndex.from_arrays(
     [pep_ids, prot_ids], names=["Peptide", "Protein"]
 )
@@ -236,8 +271,10 @@ except ValueError as e:
 # Aggregate to protein level, then compare:
 prot_agg = aggregate_to_protein(peptide_result)
 comparison_from_pep = compare_conditions(prot_agg, result_rna)
-print(f"  aggregate_to_protein + compare_conditions: "
-      f"{len(comparison_from_pep)} features compared successfully")
+print(
+    f"  aggregate_to_protein + compare_conditions: "
+    f"{len(comparison_from_pep)} features compared successfully"
+)
 
 if "--show" in sys.argv:
     plt.show()
