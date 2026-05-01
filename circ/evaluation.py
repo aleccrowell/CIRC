@@ -7,12 +7,14 @@ matplotlib so they can be used in automated pipelines without a display.
 Plotting wrappers that visualise these metrics live in
 ``circ.visualization.benchmarks``.
 """
+
 from sklearn.metrics import average_precision_score, roc_curve, auc
 
 
 # ---------------------------------------------------------------------------
 # Legacy-format ROC (merged_dict interface used by circ.limbr.simulations)
 # ---------------------------------------------------------------------------
+
 
 def roc_auc(merged_dict):
     """Compute area under the ROC curve for each method.
@@ -31,9 +33,11 @@ def roc_auc(merged_dict):
     """
     out = {}
     for tag, df in merged_dict.items():
-        truth_col = 'truth' if 'truth' in df.columns else 'Circadian'
-        score_col = 'score' if 'score' in df.columns else 'GammaBH'
-        fpr, tpr, _ = roc_curve(df[truth_col].values, 1 - df[score_col].values, pos_label=1)
+        truth_col = "truth" if "truth" in df.columns else "Circadian"
+        score_col = "score" if "score" in df.columns else "GammaBH"
+        fpr, tpr, _ = roc_curve(
+            df[truth_col].values, 1 - df[score_col].values, pos_label=1
+        )
         out[tag] = auc(fpr, tpr)
     return out
 
@@ -42,19 +46,20 @@ def roc_auc(merged_dict):
 # Classifier-output evaluation (Classifier + simulate ground-truth interface)
 # ---------------------------------------------------------------------------
 
+
 def _default_tasks(classifications, true_classes):
     """Return the default (score_col, truth_col, invert) task list."""
     tasks = []
-    if 'pirs_score' in classifications.columns and 'Const' in true_classes.columns:
-        tasks.append(('pirs_score', 'Const', True))
-    if 'tau_mean' in classifications.columns and 'Circadian' in true_classes.columns:
-        tasks.append(('tau_mean', 'Circadian', False))
-    if 'emp_p' in classifications.columns and 'Circadian' in true_classes.columns:
-        tasks.append(('emp_p', 'Circadian', True))
-    if 'pval' in classifications.columns and 'Const' in true_classes.columns:
-        tasks.append(('pval', 'Const', True))
-    if 'slope_pval' in classifications.columns and 'Linear' in true_classes.columns:
-        tasks.append(('slope_pval', 'Linear', True))
+    if "pirs_score" in classifications.columns and "Const" in true_classes.columns:
+        tasks.append(("pirs_score", "Const", True))
+    if "tau_mean" in classifications.columns and "Circadian" in true_classes.columns:
+        tasks.append(("tau_mean", "Circadian", False))
+    if "emp_p" in classifications.columns and "Circadian" in true_classes.columns:
+        tasks.append(("emp_p", "Circadian", True))
+    if "pval" in classifications.columns and "Const" in true_classes.columns:
+        tasks.append(("pval", "Const", True))
+    if "slope_pval" in classifications.columns and "Linear" in true_classes.columns:
+        tasks.append(("slope_pval", "Linear", True))
     return tasks
 
 
@@ -87,7 +92,7 @@ def classification_auc(classifications, true_classes, tasks=None):
     for score_col, truth_col, invert in tasks:
         merged = (
             classifications[[score_col]]
-            .join(true_classes[[truth_col]], how='inner')
+            .join(true_classes[[truth_col]], how="inner")
             .dropna()
         )
         if merged.empty or merged[truth_col].nunique() < 2:
@@ -101,8 +106,8 @@ def classification_auc(classifications, true_classes, tasks=None):
 def classification_ap(
     classifications,
     true_classes,
-    ground_truth_col='Const',
-    score_col='pirs_score',
+    ground_truth_col="Const",
+    score_col="pirs_score",
     invert_score=True,
 ):
     """Compute average precision (PR AUC) for a single classification task.
@@ -129,7 +134,7 @@ def classification_ap(
     """
     merged = (
         classifications[[score_col]]
-        .join(true_classes[[ground_truth_col]], how='inner')
+        .join(true_classes[[ground_truth_col]], how="inner")
         .dropna()
     )
     if merged.empty or merged[ground_truth_col].nunique() < 2:

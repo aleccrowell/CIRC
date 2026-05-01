@@ -4,9 +4,9 @@ Handles reading TSV files, parsing ZT/CT time-point labels, deduplicating
 row/column names, and writing pivoted output files — the data plumbing that
 was previously embedded in the R scripts.
 """
+
 import re
 import pandas as pd
-import numpy as np
 
 
 def read_timeseries(fn):
@@ -19,12 +19,12 @@ def read_timeseries(fn):
         raw_cols -- list of raw column-header strings (e.g. ['ZT0', 'ZT2', ...])
     """
     with open(fn) as f:
-        raw_cols = f.readline().rstrip('\n').split('\t')[1:]
+        raw_cols = f.readline().rstrip("\n").split("\t")[1:]
     try:
-        df = pd.read_table(fn, index_col='ID')
+        df = pd.read_table(fn, index_col="ID")
     except (ValueError, KeyError):
         df = pd.read_table(fn, index_col=0)
-    df = df.apply(pd.to_numeric, errors='coerce')
+    df = df.apply(pd.to_numeric, errors="coerce")
     return df, raw_cols
 
 
@@ -40,10 +40,10 @@ def parse_timepoint_label(label):
     >>> parse_timepoint_label('0')
     0.0
     """
-    label = re.sub(r'^X', '', str(label).strip())
-    label = re.sub(r'^ZT', '', label)
-    label = re.sub(r'^CT', '', label)
-    label = label.split('_')[0]
+    label = re.sub(r"^X", "", str(label).strip())
+    label = re.sub(r"^ZT", "", label)
+    label = re.sub(r"^CT", "", label)
+    label = label.split("_")[0]
     return float(label)
 
 
@@ -88,7 +88,7 @@ def deduplicate_rownames(rownames):
         new = []
         for name in rownames:
             if name in seen:
-                new.append(f'{name}-xxx{counter}')
+                new.append(f"{name}-xxx{counter}")
             else:
                 seen[name] = True
                 new.append(name)
@@ -110,11 +110,9 @@ def prepare_timeseries(fn, period):
         unique_times -- sorted list of unique time points mod period
     """
     df, raw_cols = read_timeseries(fn)
-    times = deduplicate_timepoints(
-        [parse_timepoint_label(c) for c in raw_cols], period
-    )
+    times = deduplicate_timepoints([parse_timepoint_label(c) for c in raw_cols], period)
     df.columns = pd.Index(times, dtype=float)
-    df.index = pd.Index(deduplicate_rownames(list(df.index)), name='ID')
+    df.index = pd.Index(deduplicate_rownames(list(df.index)), name="ID")
     unique_times = sorted({t % period for t in times})
     return df, unique_times
 
@@ -133,7 +131,12 @@ def write_limma_outputs(long_df, prefix, suffix):
         prefix  -- output path prefix (e.g. '/path/to/sample')
         suffix  -- output suffix (e.g. 'postLimma' or 'postVash')
     """
-    for col, name in [('Mean', 'Means'), ('SD', 'Sds'), ('N', 'Ns'), ('SDpre', 'Sds-pre')]:
-        wide = long_df.pivot(index='ID', columns='Time', values=col)
+    for col, name in [
+        ("Mean", "Means"),
+        ("SD", "Sds"),
+        ("N", "Ns"),
+        ("SDpre", "Sds-pre"),
+    ]:
+        wide = long_df.pivot(index="ID", columns="Time", values=col)
         wide.columns.name = None
-        wide.to_csv(f'{prefix}_{name}_{suffix}.txt', sep='\t', na_rep='NA')
+        wide.to_csv(f"{prefix}_{name}_{suffix}.txt", sep="\t", na_rep="NA")

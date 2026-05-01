@@ -36,6 +36,7 @@ Benchmark / evaluation plots
 The ``LABEL_COLORS`` dict maps each expression label to a consistent hex
 color and can be imported for use in custom plots.
 """
+
 from circ.visualization.classify import (
     LABEL_COLORS,
     label_distribution,
@@ -71,32 +72,32 @@ from circ.visualization.benchmarks import (
 
 __all__ = [
     # classify
-    'LABEL_COLORS',
-    'label_distribution',
-    'pirs_vs_tau',
-    'volcano',
-    'pirs_score_distribution',
-    'tau_pval_scatter',
-    'pirs_pval_scatter',
-    'slope_pval_scatter',
-    'slope_vs_rhythm',
-    'phase_wheel',
-    'period_distribution',
-    'phase_amplitude_scatter',
-    'top_constitutive_candidates',
-    'mean_expression_profiles',
-    'threshold_sensitivity',
-    'classification_summary',
+    "LABEL_COLORS",
+    "label_distribution",
+    "pirs_vs_tau",
+    "volcano",
+    "pirs_score_distribution",
+    "tau_pval_scatter",
+    "pirs_pval_scatter",
+    "slope_pval_scatter",
+    "slope_vs_rhythm",
+    "phase_wheel",
+    "period_distribution",
+    "phase_amplitude_scatter",
+    "top_constitutive_candidates",
+    "mean_expression_profiles",
+    "threshold_sensitivity",
+    "classification_summary",
     # compare
-    'rhythmicity_shift_scatter',
-    'phase_shift_histogram',
-    'label_transition_heatmap',
-    'delta_tau_volcano',
-    'comparison_summary',
+    "rhythmicity_shift_scatter",
+    "phase_shift_histogram",
+    "label_transition_heatmap",
+    "delta_tau_volcano",
+    "comparison_summary",
     # benchmarks
-    'pr_curve',
-    'roc_curve_plot',
-    'roc_auc',
-    'classification_pr',
-    'classification_roc',
+    "pr_curve",
+    "roc_curve_plot",
+    "roc_auc",
+    "classification_pr",
+    "classification_roc",
 ]

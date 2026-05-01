@@ -47,14 +47,12 @@ select = ["E", "F"]
 ignore = [
     "E402",  # module-level import not at top — common in scientific modules with sys.path setup
     "E501",  # line too long — scientific code routinely exceeds 88 chars
-    "E701",  # multiple statements on one line — legacy style in bootjtk
     "E731",  # lambda assignment — common in scientific code
     "E741",  # ambiguous variable name — l, O, I are standard in linear algebra
     "F841",  # unused variable — common in scientific unpacking
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"circ/bootjtk/*.py" = ["F401", "F811", "E711", "E712", "E702", "E703"]
 "circ/*/__init__.py" = ["F401"]
 "circ/__init__.py" = ["F401"]
 

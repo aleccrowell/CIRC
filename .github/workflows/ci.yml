@@ -35,6 +35,9 @@ jobs:
       - name: Lint (ruff)
         run: poetry run ruff check circ/
 
+      - name: Format (ruff)
+        run: poetry run ruff format --check circ/
+
   typecheck:
     runs-on: ubuntu-latest
     steps:
