@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 if "--show" not in sys.argv:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -35,6 +36,7 @@ import circ.visualization as viz
 
 try:
     import circ.visualization.interactive as iviz
+
     _HAS_PLOTLY = True
 except ImportError:
     _HAS_PLOTLY = False
@@ -47,11 +49,14 @@ FIGURES.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 print("Simulating data …")
 sim = simulate(
-    tpoints=8, nrows=300, nreps=2,
-    pcirc=0.25, plin=0.15,
+    tpoints=8,
+    nrows=300,
+    nreps=2,
+    pcirc=0.25,
+    plin=0.15,
     rseed=42,
 )
-gene_ids   = [f"gene_{i:04d}" for i in range(sim.nrows)]
+gene_ids = [f"gene_{i:04d}" for i in range(sim.nrows)]
 expression = pd.DataFrame(sim.sim, index=gene_ids, columns=sim.cols)
 expression.index.name = "#"
 
@@ -70,10 +75,10 @@ print(result["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 # Top rhythmic: highest TauMean within the rhythmic + noisy_rhythmic labels
 rhythmic_genes = result[result["label"].isin(["rhythmic", "noisy_rhythmic"])]
-top_rhythmic   = rhythmic_genes.nlargest(9, "tau_mean")
+top_rhythmic = rhythmic_genes.nlargest(9, "tau_mean")
 
 # Top constitutive: lowest PIRS score within the constitutive label
-const_genes      = result[result["label"] == "constitutive"]
+const_genes = result[result["label"] == "constitutive"]
 top_constitutive = const_genes.nsmallest(9, "pirs_score")
 
 print(f"Top 9 rhythmic genes (by TauMean):     {top_rhythmic.index.tolist()}")
@@ -89,19 +94,20 @@ print(f"Top 9 constitutive genes (by PIRS):    {top_constitutive.index.tolist()}
 print("Section 1: Mean profiles + rhythmic gallery …")
 
 fig = plt.figure(figsize=(20, 8))
-gs  = fig.add_gridspec(2, 5, hspace=0.55, wspace=0.4)
+gs = fig.add_gridspec(2, 5, hspace=0.55, wspace=0.4)
 
 # Left column: mean profiles for all labels
 ax_mean = fig.add_subplot(gs[:, 0])
-viz.mean_expression_profiles(expression, result, ax=ax_mean,
-                              title="Mean profile\nby label")
+viz.mean_expression_profiles(
+    expression, result, ax=ax_mean, title="Mean profile\nby label"
+)
 
 # Right 4 columns (2×4 = 8 panels, but we only have 9 genes; reshape to 3×3)
 # Use a nested gridspec for the gallery
 gs_gallery = gs[:, 1:].subgridspec(3, 3, hspace=0.6, wspace=0.4)
 for idx, gene_id in enumerate(top_rhythmic.index):
     r, c = divmod(idx, 3)
-    ax   = fig.add_subplot(gs_gallery[r, c])
+    ax = fig.add_subplot(gs_gallery[r, c])
     viz.gene_profile(expression, gene_id, result, ax=ax)
     ax.set_title(ax.get_title(), fontsize=7)
     ax.set_xlabel(ax.get_xlabel(), fontsize=7)
@@ -124,25 +130,29 @@ print(f"  saved → {out}")
 print("Section 2: Constitutive profiles …")
 
 fig = plt.figure(figsize=(20, 8))
-gs  = fig.add_gridspec(2, 5, hspace=0.55, wspace=0.4)
+gs = fig.add_gridspec(2, 5, hspace=0.55, wspace=0.4)
 
 ax_mean = fig.add_subplot(gs[:, 0])
-viz.mean_expression_profiles(expression, result,
-                              labels=["constitutive", "variable"],
-                              ax=ax_mean,
-                              title="Mean profile\n(constitutive / variable)")
+viz.mean_expression_profiles(
+    expression,
+    result,
+    labels=["constitutive", "variable"],
+    ax=ax_mean,
+    title="Mean profile\n(constitutive / variable)",
+)
 
 gs_gallery = gs[:, 1:].subgridspec(3, 3, hspace=0.6, wspace=0.4)
 for idx, gene_id in enumerate(top_constitutive.index):
     r, c = divmod(idx, 3)
-    ax   = fig.add_subplot(gs_gallery[r, c])
+    ax = fig.add_subplot(gs_gallery[r, c])
     viz.gene_profile(expression, gene_id, result, ax=ax)
     ax.set_title(ax.get_title(), fontsize=7)
     ax.set_xlabel(ax.get_xlabel(), fontsize=7)
     ax.tick_params(labelsize=6)
 
-fig.suptitle("Top constitutive gene candidates — individual profiles (PIRS ranked)",
-             fontsize=11)
+fig.suptitle(
+    "Top constitutive gene candidates — individual profiles (PIRS ranked)", fontsize=11
+)
 fig.tight_layout(rect=[0, 0, 1, 0.95])
 out = FIGURES / "22_constitutive_profiles.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")
@@ -160,7 +170,8 @@ print("Section 3: Expression heatmap …")
 
 fig, ax = plt.subplots(figsize=(8, 9))
 viz.expression_heatmap(
-    expression, result,
+    expression,
+    result,
     n_per_label=12,
     ax=ax,
     title="Clustered expression by label",
@@ -184,7 +195,7 @@ n_label = 6
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 for ax, genes, title_suffix, color_key in [
-    (axes[0], top_rhythmic.head(n_label),   "rhythmic hits",     "rhythmic"),
+    (axes[0], top_rhythmic.head(n_label), "rhythmic hits", "rhythmic"),
     (axes[1], top_constitutive.head(n_label), "constitutive hits", "constitutive"),
 ]:
     viz.pirs_vs_tau(result, ax=ax, title=f"Decision space — {title_suffix} annotated")
@@ -194,15 +205,21 @@ for ax, genes, title_suffix, color_key in [
             (row["pirs_score"], row["tau_mean"]),
             fontsize=6,
             color=LABEL_COLORS[color_key],
-            xytext=(4, 4), textcoords="offset points",
-            arrowprops=dict(arrowstyle="-", color=LABEL_COLORS[color_key],
-                            lw=0.6, alpha=0.7),
+            xytext=(4, 4),
+            textcoords="offset points",
+            arrowprops=dict(
+                arrowstyle="-", color=LABEL_COLORS[color_key], lw=0.6, alpha=0.7
+            ),
         )
     # Highlight the annotated genes with larger markers
     ax.scatter(
-        genes["pirs_score"], genes["tau_mean"],
-        s=60, color=LABEL_COLORS[color_key],
-        edgecolors="white", linewidths=0.6, zorder=5,
+        genes["pirs_score"],
+        genes["tau_mean"],
+        s=60,
+        color=LABEL_COLORS[color_key],
+        edgecolors="white",
+        linewidths=0.6,
+        zorder=5,
     )
 
 plt.tight_layout()
@@ -220,14 +237,16 @@ print(f"  saved → {out}")
 if _HAS_PLOTLY:
     print("Section 4: Interactive gene hunt …")
 
-    fig_html = iviz.pirs_vs_tau(result,
-                                title="Hover to identify genes — PIRS vs TauMean")
+    fig_html = iviz.pirs_vs_tau(
+        result, title="Hover to identify genes — PIRS vs TauMean"
+    )
     out = FIGURES / "24_interactive_gene_hunt.html"
     fig_html.write_html(str(out))
     print(f"  saved → {out}")
 
-    fig_html = iviz.tau_pval_scatter(result,
-                                     title="Hover to identify genes — rhythmicity decision space")
+    fig_html = iviz.tau_pval_scatter(
+        result, title="Hover to identify genes — rhythmicity decision space"
+    )
     out = FIGURES / "25_interactive_rhythm_space.html"
     fig_html.write_html(str(out))
     print(f"  saved → {out}")

@@ -544,10 +544,14 @@ def expression_heatmap(
 
     zt_cols, timepoints, unique_tp = _zt_timepoints(expression)
 
-    tp_mat = np.array([
-        expression[[c for c, t in zip(zt_cols, timepoints) if t == tp]].mean(axis=1).values
-        for tp in unique_tp
-    ]).T  # shape (n_genes, n_tp)
+    tp_mat = np.array(
+        [
+            expression[[c for c, t in zip(zt_cols, timepoints) if t == tp]]
+            .mean(axis=1)
+            .values
+            for tp in unique_tp
+        ]
+    ).T  # shape (n_genes, n_tp)
     gene_index = expression.index.tolist()
 
     if classifications is not None:
@@ -570,7 +574,9 @@ def expression_heatmap(
             col, ascending = _LABEL_SELECT_COL.get(lbl, ("pirs_score", True))
             if col and col in clf.columns and clf[col].notna().any():
                 ranked = clf.loc[genes, col].dropna()
-                genes = (ranked.nsmallest(n) if ascending else ranked.nlargest(n)).index.tolist()
+                genes = (
+                    ranked.nsmallest(n) if ascending else ranked.nlargest(n)
+                ).index.tolist()
             else:
                 genes = genes[:n]
 
@@ -613,13 +619,15 @@ def expression_heatmap(
     x_labels = [f"ZT{int(tp):02d}" for tp in unique_tp]
 
     # Build hover text matrix
-    hover = np.array([
+    hover = np.array(
         [
-            f"<b>{gene}</b><br>ZT: {x_labels[j]}<br>z-score: {mat[i, j]:.2f}"
-            for j in range(mat.shape[1])
+            [
+                f"<b>{gene}</b><br>ZT: {x_labels[j]}<br>z-score: {mat[i, j]:.2f}"
+                for j in range(mat.shape[1])
+            ]
+            for i, gene in enumerate(ordered_genes)
         ]
-        for i, gene in enumerate(ordered_genes)
-    ])
+    )
 
     fig = go.Figure(
         go.Heatmap(
@@ -638,8 +646,10 @@ def expression_heatmap(
 
     # Label color annotation traces on the right y-axis (as a thin bar)
     if gene_label_list is not None:
-        fig.update_layout(yaxis2=dict(overlaying="y", side="right", showticklabels=False))
-        for lbl in (labels or []):
+        fig.update_layout(
+            yaxis2=dict(overlaying="y", side="right", showticklabels=False)
+        )
+        for lbl in labels or []:
             idxs = [i for i, l in enumerate(gene_label_list) if l == lbl]
             if not idxs:
                 continue

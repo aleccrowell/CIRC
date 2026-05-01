@@ -78,7 +78,9 @@ def rhythmicity_shift_scatter(
                             color=color,
                             size=size,
                             opacity=opacity,
-                            line=dict(width=0.5, color="white") if name_suffix else dict(width=0),
+                            line=dict(width=0.5, color="white")
+                            if name_suffix
+                            else dict(width=0),
                         ),
                         legendgroup=status,
                         showlegend=show_legend,
@@ -152,7 +154,9 @@ def delta_tau_volcano(
     df = comparison.dropna(subset=["delta_tau", "tau_padj"]).copy()
     df["_neg_log_p"] = -np.log10(df["tau_padj"].clip(lower=1e-300))
 
-    extra_cols = [c for c in ["tau_mean_A", "tau_mean_B", "tau_padj"] if c in df.columns]
+    extra_cols = [
+        c for c in ["tau_mean_A", "tau_mean_B", "tau_padj"] if c in df.columns
+    ]
 
     hover_parts = [
         "<b>%{text}</b>",
@@ -160,7 +164,11 @@ def delta_tau_volcano(
         "−log₁₀(FDR): %{y:.2f}",
     ]
     for i, col in enumerate(extra_cols):
-        label = {"tau_mean_A": "TauMean A", "tau_mean_B": "TauMean B", "tau_padj": "FDR"}[col]
+        label = {
+            "tau_mean_A": "TauMean A",
+            "tau_mean_B": "TauMean B",
+            "tau_padj": "FDR",
+        }[col]
         fmt = ".3f" if col.startswith("tau_mean") else ".3g"
         hover_parts.append(f"{label}: %{{customdata[{i}]:{fmt}}}")
     hovertemplate = "<br>".join(hover_parts) + "<extra></extra>"

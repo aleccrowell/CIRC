@@ -73,7 +73,9 @@ def _zt_timepoints(expression):
     cols = [c for c in expression.columns if c.startswith("ZT") or c.startswith("CT")]
     if not cols:
         raise ValueError("No ZT/CT columns found in expression DataFrame.")
-    tp = np.array([int(c.replace("ZT", "").replace("CT", "").split("_")[0]) for c in cols])
+    tp = np.array(
+        [int(c.replace("ZT", "").replace("CT", "").split("_")[0]) for c in cols]
+    )
     return cols, tp, np.sort(np.unique(tp))
 
 
@@ -962,7 +964,9 @@ def classification_summary(
     has_phase = _has(classifications, "phase_mean")
     has_period = _has(classifications, "period_mean")
     has_pval = _has(classifications, "pval") or _has(classifications, "pval_bh")
-    has_slope = _has(classifications, "slope_pval") or _has(classifications, "slope_pval_bh")
+    has_slope = _has(classifications, "slope_pval") or _has(
+        classifications, "slope_pval_bh"
+    )
     has_slope_emp = has_slope and has_emp_p
 
     # Build ordered list of (title, callable) for each panel
@@ -1219,7 +1223,10 @@ def gene_profile(
 
     ax.scatter(timepoints, vals, color=color, s=14, alpha=0.55, zorder=3)
     means = np.array(
-        [vals[[i for i, t in enumerate(timepoints) if t == tp]].mean() for tp in unique_tp]
+        [
+            vals[[i for i, t in enumerate(timepoints) if t == tp]].mean()
+            for tp in unique_tp
+        ]
     )
     ax.plot(unique_tp, means, color=color, lw=1.5, zorder=2)
 
@@ -1247,12 +1254,12 @@ def gene_profile(
 
 # Per-label column and sort direction for representative gene selection
 _LABEL_SELECT_COL = {
-    "constitutive":   ("pirs_score", True),   # ascending PIRS → most stable
-    "rhythmic":       ("tau_mean",   False),  # descending tau → clearest rhythm
-    "noisy_rhythmic": ("tau_mean",   False),
-    "linear":         ("slope_pval", True),   # ascending slope_pval → clearest trend
-    "variable":       ("pirs_score", False),  # descending PIRS → most variable
-    "unclassified":   (None,         True),
+    "constitutive": ("pirs_score", True),  # ascending PIRS → most stable
+    "rhythmic": ("tau_mean", False),  # descending tau → clearest rhythm
+    "noisy_rhythmic": ("tau_mean", False),
+    "linear": ("slope_pval", True),  # ascending slope_pval → clearest trend
+    "variable": ("pirs_score", False),  # descending PIRS → most variable
+    "unclassified": (None, True),
 }
 
 
@@ -1322,7 +1329,9 @@ def expression_heatmap(
     # Average replicates → one value per gene per unique timepoint
     tp_mat = pd.DataFrame(
         {
-            int(tp): expression[[c for c, t in zip(zt_cols, timepoints) if t == tp]].mean(axis=1)
+            int(tp): expression[
+                [c for c, t in zip(zt_cols, timepoints) if t == tp]
+            ].mean(axis=1)
             for tp in unique_tp
         },
         index=expression.index,
@@ -1380,8 +1389,15 @@ def expression_heatmap(
 
     if not ordered_genes:
         ax.set_title(title)
-        ax.text(0.5, 0.5, "No genes to display", transform=ax.transAxes,
-                ha="center", va="center", color="#888888")
+        ax.text(
+            0.5,
+            0.5,
+            "No genes to display",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="#888888",
+        )
         return ax
 
     mat = tp_mat.loc[ordered_genes].values
@@ -1414,7 +1430,7 @@ def expression_heatmap(
     # White lines between label groups
     if gene_label_list is not None:
         boundary = 0
-        for lbl in (labels or []):
+        for lbl in labels or []:
             cnt = gene_label_list.count(lbl)
             boundary += cnt
             if 0 < boundary < n_genes:
@@ -1442,8 +1458,10 @@ def expression_heatmap(
     if gene_label_list is not None:
         cax_strip = divider.append_axes("left", size="4%", pad=0.05)
         rgb = np.array(
-            [plt.matplotlib.colors.to_rgb(LABEL_COLORS.get(l, "#8C8C8C"))
-             for l in gene_label_list],
+            [
+                plt.matplotlib.colors.to_rgb(LABEL_COLORS.get(l, "#8C8C8C"))
+                for l in gene_label_list
+            ],
             dtype=float,
         ).reshape(n_genes, 1, 3)
         cax_strip.imshow(rgb, aspect="auto", interpolation="nearest")

@@ -3,13 +3,15 @@
 Metric correctness tests (roc_auc, classification_auc, classification_ap)
 live in tests/test_evaluation.py.
 """
+
 import re
 
 import numpy as np
 import pandas as pd
 import pytest
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.axes
 
@@ -25,10 +27,11 @@ from circ.visualization.benchmarks import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def close_figures():
     yield
-    plt.close('all')
+    plt.close("all")
 
 
 @pytest.fixture
@@ -36,13 +39,13 @@ def curves_df():
     """Synthetic PR curves DataFrame."""
     rng = np.random.default_rng(0)
     rows = []
-    for method in ['PIRS', 'RSD']:
+    for method in ["PIRS", "RSD"]:
         for rep in range(3):
             n = 20
             recall = np.linspace(0, 1, n)
             precision = np.clip(rng.uniform(0.3, 1.0, n) - recall * 0.3, 0, 1)
             for r, p in zip(recall, precision):
-                rows.append({'recall': r, 'precision': p, 'method': method, 'rep': rep})
+                rows.append({"recall": r, "precision": p, "method": method, "rep": rep})
     return pd.DataFrame(rows)
 
 
@@ -53,8 +56,8 @@ def merged_dict():
     n = 100
     truth = rng.integers(0, 2, n)
     return {
-        'method_a': pd.DataFrame({'Circadian': truth, 'GammaBH': rng.uniform(0, 1, n)}),
-        'method_b': pd.DataFrame({'Circadian': truth, 'GammaBH': rng.uniform(0, 1, n)}),
+        "method_a": pd.DataFrame({"Circadian": truth, "GammaBH": rng.uniform(0, 1, n)}),
+        "method_b": pd.DataFrame({"Circadian": truth, "GammaBH": rng.uniform(0, 1, n)}),
     }
 
 
@@ -63,15 +66,23 @@ def classification_df():
     """Synthetic classification output."""
     rng = np.random.default_rng(2)
     n = 80
-    labels = ['constitutive'] * 20 + ['rhythmic'] * 20 + ['variable'] * 20 + ['noisy_rhythmic'] * 20
-    return pd.DataFrame({
-        'pirs_score': np.abs(rng.normal(0, 1, n)),
-        'tau_mean':   rng.uniform(0, 1, n),
-        'emp_p':      rng.uniform(0, 1, n),
-        'pval':       rng.uniform(0, 1, n),
-        'slope_pval': rng.uniform(0, 1, n),
-        'label':      labels,
-    }, index=[f'g{i}' for i in range(n)])
+    labels = (
+        ["constitutive"] * 20
+        + ["rhythmic"] * 20
+        + ["variable"] * 20
+        + ["noisy_rhythmic"] * 20
+    )
+    return pd.DataFrame(
+        {
+            "pirs_score": np.abs(rng.normal(0, 1, n)),
+            "tau_mean": rng.uniform(0, 1, n),
+            "emp_p": rng.uniform(0, 1, n),
+            "pval": rng.uniform(0, 1, n),
+            "slope_pval": rng.uniform(0, 1, n),
+            "label": labels,
+        },
+        index=[f"g{i}" for i in range(n)],
+    )
 
 
 @pytest.fixture
@@ -79,16 +90,20 @@ def true_classes(classification_df):
     """Simulated ground-truth binary labels aligned with classification_df."""
     rng = np.random.default_rng(3)
     n = len(classification_df)
-    return pd.DataFrame({
-        'Const':     rng.integers(0, 2, n),
-        'Circadian': rng.integers(0, 2, n),
-        'Linear':    rng.integers(0, 2, n),
-    }, index=classification_df.index)
+    return pd.DataFrame(
+        {
+            "Const": rng.integers(0, 2, n),
+            "Circadian": rng.integers(0, 2, n),
+            "Linear": rng.integers(0, 2, n),
+        },
+        index=classification_df.index,
+    )
 
 
 # ---------------------------------------------------------------------------
 # pr_curve
 # ---------------------------------------------------------------------------
+
 
 class TestPrCurve:
     def test_returns_axes(self, curves_df):
@@ -103,11 +118,12 @@ class TestPrCurve:
     def test_baseline_drawn(self, curves_df):
         ax = pr_curve(curves_df, baseline=0.4)
         _, labels = ax.get_legend_handles_labels()
-        assert 'random classifier' in labels
+        assert "random classifier" in labels
 
     def test_saves_to_file(self, curves_df, tmp_path):
         import os
-        out = str(tmp_path / 'pr.png')
+
+        out = str(tmp_path / "pr.png")
         pr_curve(curves_df, outpath=out)
         assert os.path.exists(out)
 
@@ -115,6 +131,7 @@ class TestPrCurve:
 # ---------------------------------------------------------------------------
 # roc_curve_plot
 # ---------------------------------------------------------------------------
+
 
 class TestRocCurvePlot:
     def test_returns_axes(self, merged_dict):
@@ -130,7 +147,11 @@ class TestRocCurvePlot:
     def test_accepts_truth_score_columns(self):
         rng = np.random.default_rng(4)
         n = 50
-        d = {'m1': pd.DataFrame({'truth': rng.integers(0, 2, n), 'score': rng.uniform(0, 1, n)})}
+        d = {
+            "m1": pd.DataFrame(
+                {"truth": rng.integers(0, 2, n), "score": rng.uniform(0, 1, n)}
+            )
+        }
         ax = roc_curve_plot(d)
         assert isinstance(ax, matplotlib.axes.Axes)
 
@@ -138,6 +159,7 @@ class TestRocCurvePlot:
 # ---------------------------------------------------------------------------
 # classification_pr
 # ---------------------------------------------------------------------------
+
 
 class TestClassificationPr:
     def test_returns_axes(self, classification_df, true_classes):
@@ -151,14 +173,17 @@ class TestClassificationPr:
 
     def test_circadian_truth_col(self, classification_df, true_classes):
         ax = classification_pr(
-            classification_df, true_classes,
-            ground_truth_col='Circadian', score_col='tau_mean', invert_score=False,
+            classification_df,
+            true_classes,
+            ground_truth_col="Circadian",
+            score_col="tau_mean",
+            invert_score=False,
         )
         assert isinstance(ax, matplotlib.axes.Axes)
 
     def test_empty_intersection_no_crash(self, classification_df, true_classes):
         tc = true_classes.copy()
-        tc.index = [f'other_{i}' for i in range(len(tc))]
+        tc.index = [f"other_{i}" for i in range(len(tc))]
         ax = classification_pr(classification_df, tc)
         assert isinstance(ax, matplotlib.axes.Axes)
 
@@ -166,6 +191,7 @@ class TestClassificationPr:
 # ---------------------------------------------------------------------------
 # classification_roc — rendering
 # ---------------------------------------------------------------------------
+
 
 class TestClassificationRoc:
     def test_returns_axes(self, classification_df, true_classes):
@@ -179,7 +205,7 @@ class TestClassificationRoc:
         assert len(ax.lines) >= 3
 
     def test_explicit_tasks(self, classification_df, true_classes):
-        tasks = [('pirs_score', 'Const', True)]
+        tasks = [("pirs_score", "Const", True)]
         ax = classification_roc(classification_df, true_classes, tasks=tasks)
         # 1 method line + diagonal
         assert len(ax.lines) == 2
@@ -189,13 +215,14 @@ class TestClassificationRoc:
 # classification_roc — AUC values embedded in legend labels
 # ---------------------------------------------------------------------------
 
+
 class TestClassificationRocValues:
     """AUC values written into classification_roc() legend labels should be correct."""
 
     def _extract_auc(self, ax):
         """Return the first AUC value found in any line label on the axes."""
         for line in ax.lines:
-            m = re.search(r'AUC=([0-9.]+)', line.get_label())
+            m = re.search(r"AUC=([0-9.]+)", line.get_label())
             if m:
                 return float(m.group(1))
         return None
@@ -204,16 +231,20 @@ class TestClassificationRocValues:
         """A score that perfectly separates Linear genes should appear as AUC ≈ 1.0."""
         n = 100
         clf_df = pd.DataFrame(
-            {'slope_pval': np.array([0.001] * 25 + [0.99] * 75)},
-            index=[f'g{i}' for i in range(n)],
+            {"slope_pval": np.array([0.001] * 25 + [0.99] * 75)},
+            index=[f"g{i}" for i in range(n)],
         )
         truth_df = pd.DataFrame(
-            {'Linear': np.array([1] * 25 + [0] * 75)},
+            {"Linear": np.array([1] * 25 + [0] * 75)},
             index=clf_df.index,
         )
-        ax = classification_roc(clf_df, truth_df, tasks=[('slope_pval', 'Linear', True)])
+        ax = classification_roc(
+            clf_df, truth_df, tasks=[("slope_pval", "Linear", True)]
+        )
         auc_val = self._extract_auc(ax)
-        assert auc_val is not None, "AUC value not found in classification_roc legend labels"
+        assert auc_val is not None, (
+            "AUC value not found in classification_roc legend labels"
+        )
         assert auc_val > 0.99, (
             f"Perfect slope_pval should give AUC > 0.99; got {auc_val:.3f}"
         )
@@ -223,16 +254,18 @@ class TestClassificationRocValues:
         rng = np.random.default_rng(55)
         n = 300
         clf_df = pd.DataFrame(
-            {'pirs_score': rng.uniform(0, 1, n)},
-            index=[f'g{i}' for i in range(n)],
+            {"pirs_score": rng.uniform(0, 1, n)},
+            index=[f"g{i}" for i in range(n)],
         )
         truth_df = pd.DataFrame(
-            {'Const': rng.integers(0, 2, n)},
+            {"Const": rng.integers(0, 2, n)},
             index=clf_df.index,
         )
-        ax = classification_roc(clf_df, truth_df, tasks=[('pirs_score', 'Const', True)])
+        ax = classification_roc(clf_df, truth_df, tasks=[("pirs_score", "Const", True)])
         auc_val = self._extract_auc(ax)
-        assert auc_val is not None, "AUC value not found in classification_roc legend labels"
+        assert auc_val is not None, (
+            "AUC value not found in classification_roc legend labels"
+        )
         assert abs(auc_val - 0.5) < 0.1, (
             f"Random pirs_score AUC={auc_val:.3f} should be near 0.5"
         )
@@ -241,9 +274,10 @@ class TestClassificationRocValues:
         """All auto-detected tasks should embed an AUC value in their legend label."""
         ax = classification_roc(classification_df, true_classes)
         auc_labels = [
-            l for line in ax.lines
+            l
+            for line in ax.lines
             for l in [line.get_label()]
-            if re.search(r'AUC=([0-9.]+)', l)
+            if re.search(r"AUC=([0-9.]+)", l)
         ]
         # Should have at least one labelled task line (random diagonal also has AUC=0.5)
         assert len(auc_labels) >= 2, (

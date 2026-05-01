@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 if "--show" not in sys.argv:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -41,11 +42,14 @@ FIGURES.mkdir(exist_ok=True)
 
 print("Simulating data …")
 sim = simulate(
-    tpoints=8, nrows=300, nreps=2,
-    pcirc=0.25, plin=0.15,
+    tpoints=8,
+    nrows=300,
+    nreps=2,
+    pcirc=0.25,
+    plin=0.15,
     rseed=42,
 )
-gene_ids  = [f"gene_{i:04d}" for i in range(sim.nrows)]
+gene_ids = [f"gene_{i:04d}" for i in range(sim.nrows)]
 expression = pd.DataFrame(sim.sim, index=gene_ids, columns=sim.cols)
 expression.index.name = "#"
 
