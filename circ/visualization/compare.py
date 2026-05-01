@@ -7,12 +7,13 @@ import seaborn as sns
 
 from circ.visualization.classify import LABEL_COLORS, _ax
 
-# Colors and draw order for rhythmicity change categories
+# Colors and draw order for rhythmicity change categories.
+# Subset of the Okabe-Ito palette for color-blindness safety.
 _STATUS_COLORS = {
-    "maintained_rhythmic": "#6ACC65",
-    "gained": "#D65F5F",
-    "lost": "#4878CF",
-    "maintained_nonrhythmic": "#CCCCCC",
+    "maintained_rhythmic": "#009E73",  # bluish green
+    "gained": "#D55E00",  # vermilion
+    "lost": "#0072B2",  # blue
+    "maintained_nonrhythmic": "#CCCCCC",  # gray
 }
 _STATUS_ORDER = ["maintained_rhythmic", "gained", "lost", "maintained_nonrhythmic"]
 
