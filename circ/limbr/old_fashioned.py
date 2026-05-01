@@ -46,7 +46,7 @@ class old_fashioned:
             self.raw_data = pd.read_csv(filename,sep='\t').set_index(['Peptide','Protein'])
         if self.data_type == 'r':
             self.raw_data = pd.read_csv(filename,sep='\t').set_index('#')
-        if pool != None:
+        if pool is not None:
             self.norm_map = pd.read_parquet(pool)['pool_number'].to_dict()
         self.notdone = True
 

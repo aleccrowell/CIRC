@@ -36,10 +36,35 @@ include = ["circ/bootjtk/ref_files/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=circ --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+source = ["circ"]
+omit = ["circ/bootjtk/mpfit.py"]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = [
+    "E402",  # module-level import not at top — common in scientific modules with sys.path setup
+    "E501",  # line too long — scientific code routinely exceeds 88 chars
+    "E701",  # multiple statements on one line — legacy style in bootjtk
+    "E731",  # lambda assignment — common in scientific code
+    "E741",  # ambiguous variable name — l, O, I are standard in linear algebra
+    "F841",  # unused variable — common in scientific unpacking
+]
+
+[tool.ruff.lint.per-file-ignores]
+"circ/bootjtk/*.py" = ["F401", "F811", "E711", "E712", "E702", "E703"]
+"circ/*/__init__.py" = ["F401"]
+"circ/__init__.py" = ["F401"]
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["pytest>=9.0.3", "plotly>=6.0"]
+dev = ["pytest>=9.0.3", "plotly>=6.0", "ruff (>=0.15.12,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]

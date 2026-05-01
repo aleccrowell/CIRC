@@ -6,8 +6,6 @@ called directly with pre-computed data.
 
 Metric-only functions (no matplotlib) live in ``circ.evaluation``.
 """
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_curve, auc
