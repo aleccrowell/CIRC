@@ -269,7 +269,7 @@ Full license texts and attribution details are in `NOTICE`.
 |---|---|---|
 | `circ.limbr` | Alexander M. Crowell (2017) | BSD 3-Clause |
 | `circ.pirs` | Alexander M. Crowell (2017) | BSD 3-Clause |
-| `circ.bootjtk` | Alan L. Hutchison (2016); Alexander M. Crowell | MIT |
+| `circ.bootjtk` | Alan L. Hutchison (2016) | MIT |
 | `circ/bootjtk/mpfit.py` | More' et al. → C. Markwardt → M. Rivers | — |
 
 ### Key publications
