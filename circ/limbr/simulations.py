@@ -8,7 +8,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from circ.simulations import simulate  # noqa: F401  re-exported for backward compat
+from circ.simulations import simulate
+
+__all__ = ["simulate", "analyze"]
 
 
 class analyze:
