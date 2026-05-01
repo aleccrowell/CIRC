@@ -6,14 +6,16 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
-# Consistent label colors used across every plot in this module
+# Consistent label colors used across every plot in this module.
+# Palette is Okabe-Ito, safe for the most common forms of color blindness
+# (deuteranopia, protanopia, tritanopia).
 LABEL_COLORS = {
-    "constitutive": "#4878CF",
-    "rhythmic": "#6ACC65",
-    "linear": "#D65F5F",
-    "variable": "#B47CC7",
-    "noisy_rhythmic": "#C4AD66",
-    "unclassified": "#8C8C8C",
+    "constitutive": "#0072B2",  # blue
+    "rhythmic": "#009E73",  # bluish green
+    "linear": "#D55E00",  # vermilion
+    "variable": "#CC79A7",  # reddish purple
+    "noisy_rhythmic": "#E69F00",  # orange
+    "unclassified": "#8C8C8C",  # gray
 }
 
 _LABEL_ORDER = [
@@ -877,8 +879,8 @@ def top_constitutive_candidates(
         if pval_sig and slope_ns:
             return LABEL_COLORS["constitutive"]
         if pval_sig:
-            return "#7BA7D4"
-        return "#B0C4DE"
+            return "#5BA3C9"
+        return "#A8CCE0"
 
     colors = [_bar_color(row) for _, row in top.iterrows()]
     top_rev = top.iloc[::-1]
@@ -903,11 +905,11 @@ def top_constitutive_candidates(
         legend_patches.append(
             mpatches.Patch(color=LABEL_COLORS["constitutive"], label=base_lbl)
         )
-    if "#7BA7D4" in color_set:
-        legend_patches.append(mpatches.Patch(color="#7BA7D4", label="has linear slope"))
-    if "#B0C4DE" in color_set:
+    if "#5BA3C9" in color_set:
+        legend_patches.append(mpatches.Patch(color="#5BA3C9", label="has linear slope"))
+    if "#A8CCE0" in color_set:
         legend_patches.append(
-            mpatches.Patch(color="#B0C4DE", label="not yet significant")
+            mpatches.Patch(color="#A8CCE0", label="not yet significant")
         )
     for lbl in _LABEL_ORDER:
         if lbl != "constitutive" and LABEL_COLORS.get(lbl) in color_set:
