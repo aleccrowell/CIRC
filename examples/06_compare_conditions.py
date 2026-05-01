@@ -40,11 +40,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from circ.simulations import simulate
 from circ.expression_classification.classify import Classifier
-from circ.visualization import LABEL_COLORS
 import circ.visualization as viz
 from circ.compare import compare_conditions, label_change_table
 
@@ -124,13 +122,13 @@ print(result_B["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 print("Section 1: Label distribution comparison …")
 
+xmax = max(
+    result_A["label"].value_counts().max(),
+    result_B["label"].value_counts().max(),
+) * 1.15
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
-viz.label_distribution(result_A, ax=axes[0], title=COND_LABELS[0])
-viz.label_distribution(result_B, ax=axes[1], title=COND_LABELS[1])
-
-xmax = max(axes[0].get_xlim()[1], axes[1].get_xlim()[1])
-axes[0].set_xlim(0, xmax)
-axes[1].set_xlim(0, xmax)
+viz.label_distribution(result_A, ax=axes[0], title=COND_LABELS[0], xlim=xmax)
+viz.label_distribution(result_B, ax=axes[1], title=COND_LABELS[1], xlim=xmax)
 
 plt.tight_layout()
 out = FIGURES / "26_label_comparison.png"
@@ -272,46 +270,12 @@ if "phase_padj" in comparison.columns:
 if _HAS_PLOTLY:
     print("\nSection 6: Interactive figure …")
 
-    hover_texts = [
-        f"<b>{g}</b><br>"
-        f"TauMean A: {row['tau_mean_A']:.3f}<br>"
-        f"TauMean B: {row['tau_mean_B']:.3f}<br>"
-        f"Δ tau: {row['delta_tau']:+.3f}<br>"
-        f"{row['rhythmicity_status']}"
-        for g, row in comparison.iterrows()
-    ]
-
-    import plotly.graph_objects as go
-
-    _STATUS_COLORS = {
-        'maintained_rhythmic':    '#6ACC65',
-        'gained':                 '#D65F5F',
-        'lost':                   '#4878CF',
-        'maintained_nonrhythmic': '#CCCCCC',
-    }
-    traces = []
-    lim = max(comparison["tau_mean_A"].max(), comparison["tau_mean_B"].max()) * 1.05
-    for status, color in _STATUS_COLORS.items():
-        sub  = comparison[comparison["rhythmicity_status"] == status]
-        htxt = [hover_texts[comparison.index.get_loc(g)] for g in sub.index]
-        if sub.empty:
-            continue
-        traces.append(go.Scatter(
-            x=sub["tau_mean_A"], y=sub["tau_mean_B"],
-            mode="markers",
-            name=f"{status} (n={len(sub)})",
-            marker=dict(color=color, size=5, opacity=0.7),
-            hovertext=htxt,
-            hovertemplate="%{hovertext}<extra></extra>",
-        ))
-    traces.append(go.Scatter(
-        x=[0, lim], y=[0, lim], mode="lines",
-        line=dict(color="#999999", dash="dash", width=1),
-        name="y = x", hoverinfo="skip",
-    ))
-    fig_html = go.Figure(traces)
+    fig_html = iviz.rhythmicity_shift_scatter(
+        comparison,
+        title=f"Rhythmicity shift — hover to identify genes<br>"
+              f"{COND_LABELS[0]} → {COND_LABELS[1]}",
+    )
     fig_html.update_layout(
-        title="Rhythmicity shift — hover to identify genes",
         xaxis_title=f"TauMean — {COND_LABELS[0]}",
         yaxis_title=f"TauMean — {COND_LABELS[1]}",
     )

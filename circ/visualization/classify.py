@@ -36,7 +36,7 @@ def _ax(ax):
 
 
 def _safe_neglog10(series, floor=1e-300):
-    return -np.log10(np.maximum(series.clip(lower=floor), floor))
+    return -np.log10(np.maximum(series, floor))
 
 
 def _has(df, col):
@@ -68,6 +68,15 @@ def _label_legend(present, ax):
         ax.legend(handles=patches, loc="best", frameon=False, fontsize=9)
 
 
+def _zt_timepoints(expression):
+    """Return (zt_cols, timepoints_array, unique_tp_array) for an expression DataFrame."""
+    cols = [c for c in expression.columns if c.startswith("ZT") or c.startswith("CT")]
+    if not cols:
+        raise ValueError("No ZT/CT columns found in expression DataFrame.")
+    tp = np.array([int(c.replace("ZT", "").replace("CT", "").split("_")[0]) for c in cols])
+    return cols, tp, np.sort(np.unique(tp))
+
+
 def _clip_axes_to_data(ax, x_series, y_series, x_pct=(1, 99), y_pct=(0, 99)):
     """Set axis limits to data percentiles so outliers don't compress the view."""
     x = x_series.dropna()
@@ -87,7 +96,9 @@ def _clip_axes_to_data(ax, x_series, y_series, x_pct=(1, 99), y_pct=(0, 99)):
 # ---------------------------------------------------------------------------
 
 
-def label_distribution(classifications, ax=None, title="Expression label counts"):
+def label_distribution(
+    classifications, ax=None, title="Expression label counts", xlim=None
+):
     """Horizontal bar chart of gene counts per expression label.
 
     Parameters
@@ -96,6 +107,14 @@ def label_distribution(classifications, ax=None, title="Expression label counts"
         Output of ``Classifier.classify()``.
     ax : matplotlib.axes.Axes, optional
     title : str, optional
+    xlim : float or None
+        If provided, fix the x-axis upper limit to this value.  Useful when
+        placing two side-by-side distribution charts on a shared scale::
+
+            xmax = max(result_A["label"].value_counts().max(),
+                       result_B["label"].value_counts().max()) * 1.15
+            viz.label_distribution(result_A, ax=axes[0], xlim=xmax)
+            viz.label_distribution(result_B, ax=axes[1], xlim=xmax)
 
     Returns
     -------
@@ -112,6 +131,8 @@ def label_distribution(classifications, ax=None, title="Expression label counts"
     ax.set_xlabel("Gene count")
     ax.set_title(title)
     ax.invert_yaxis()
+    if xlim is not None:
+        ax.set_xlim(0, xlim)
     sns.despine(ax=ax, left=True)
     return ax
 
@@ -231,6 +252,11 @@ def volcano(
         label=f"PIRS p{int(pirs_percentile)}",
     )
     _clip_axes_to_data(ax, df["pirs_score"], df["neg_log_emp_p"])
+    _qstyle = dict(transform=ax.transAxes, fontsize=7, color="#AAAAAA", style="italic")
+    ax.text(0.02, 0.04, "constitutive", va="bottom", ha="left", **_qstyle)
+    ax.text(0.98, 0.04, "variable", va="bottom", ha="right", **_qstyle)
+    ax.text(0.02, 0.96, "noisy_rhythmic", va="top", ha="left", **_qstyle)
+    ax.text(0.98, 0.96, "rhythmic", va="top", ha="right", **_qstyle)
     ax.set_xlabel("PIRS score")
     ax.set_ylabel("−log₁₀(GammaBH)")
     ax.set_title(title)
@@ -609,7 +635,7 @@ def phase_wheel(
         width=widths,
         align="edge",
         alpha=0.7,
-        color="#6ACC65",
+        color=LABEL_COLORS["rhythmic"],
         edgecolor="white",
     )
 
@@ -936,9 +962,8 @@ def classification_summary(
     has_phase = _has(classifications, "phase_mean")
     has_period = _has(classifications, "period_mean")
     has_pval = _has(classifications, "pval") or _has(classifications, "pval_bh")
-    has_slope_emp = (
-        _has(classifications, "slope_pval") or _has(classifications, "slope_pval_bh")
-    ) and has_emp_p
+    has_slope = _has(classifications, "slope_pval") or _has(classifications, "slope_pval_bh")
+    has_slope_emp = has_slope and has_emp_p
 
     # Build ordered list of (title, callable) for each panel
     panels = [
@@ -961,6 +986,12 @@ def classification_summary(
         (
             "top_constitutive_candidates",
             lambda ax: top_constitutive_candidates(
+                classifications, pirs_percentile=pirs_percentile, ax=ax
+            ),
+        ),
+        (
+            "threshold_sensitivity",
+            lambda ax: threshold_sensitivity(
                 classifications, pirs_percentile=pirs_percentile, ax=ax
             ),
         ),
@@ -989,6 +1020,18 @@ def classification_summary(
     if has_pval:
         panels.append(
             ("pirs_pval_scatter", lambda ax: pirs_pval_scatter(classifications, ax=ax))
+        )
+    if has_slope:
+        panels.append(
+            (
+                "slope_pval_scatter",
+                lambda ax: slope_pval_scatter(
+                    classifications,
+                    slope_pval_threshold=slope_pval_threshold,
+                    pirs_percentile=pirs_percentile,
+                    ax=ax,
+                ),
+            )
         )
     if has_slope_emp:
         panels.append(
@@ -1070,17 +1113,7 @@ def mean_expression_profiles(
     """
     ax = _ax(ax)
 
-    zt_cols = [
-        c for c in expression.columns if c.startswith("ZT") or c.startswith("CT")
-    ]
-    if not zt_cols:
-        raise ValueError("No ZT/CT columns found in expression DataFrame.")
-
-    def _parse_zt(col):
-        return int(col.replace("ZT", "").replace("CT", "").split("_")[0])
-
-    timepoints = np.array([_parse_zt(c) for c in zt_cols])
-    unique_tp = np.sort(np.unique(timepoints))
+    zt_cols, timepoints, unique_tp = _zt_timepoints(expression)
 
     # Average replicates → one value per gene per unique timepoint
     tp_means = pd.DataFrame(
@@ -1128,6 +1161,300 @@ def mean_expression_profiles(
     ax.set_title(title)
     ax.legend(frameon=False, fontsize=9)
     sns.despine(ax=ax)
+    return ax
+
+
+def gene_profile(
+    expression,
+    gene_id,
+    classifications=None,
+    color=None,
+    ax=None,
+    title=None,
+):
+    """Time-series profile for a single gene.
+
+    Scatter-plots all replicate sample values with the per-timepoint mean as
+    a line.  When *classifications* is provided the color is derived from the
+    gene's label and the title is annotated with τ, phase, and PIRS score.
+
+    Parameters
+    ----------
+    expression : pd.DataFrame
+        Expression matrix with ZT/CT-prefixed sample columns.
+    gene_id : str
+        Row label in *expression*.
+    classifications : pd.DataFrame, optional
+        Output of ``Classifier.classify()``, indexed by the same gene IDs.
+        Used to determine label color and to annotate the title with scores.
+    color : str, optional
+        Point/line color.  Derived from the label in *classifications* when
+        omitted; falls back to ``LABEL_COLORS['constitutive']``.
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+        Defaults to *gene_id* with score annotations appended.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    ax = _ax(ax)
+    zt_cols, timepoints, unique_tp = _zt_timepoints(expression)
+
+    if gene_id not in expression.index:
+        raise ValueError(f"{gene_id!r} not found in expression index.")
+
+    vals = expression.loc[gene_id, zt_cols].astype(float).values
+
+    if color is None:
+        if classifications is not None and gene_id in classifications.index:
+            lbl = (
+                classifications.at[gene_id, "label"]
+                if "label" in classifications.columns
+                else None
+            )
+            color = LABEL_COLORS.get(lbl, "#8C8C8C")
+        else:
+            color = LABEL_COLORS["constitutive"]
+
+    ax.scatter(timepoints, vals, color=color, s=14, alpha=0.55, zorder=3)
+    means = np.array(
+        [vals[[i for i, t in enumerate(timepoints) if t == tp]].mean() for tp in unique_tp]
+    )
+    ax.plot(unique_tp, means, color=color, lw=1.5, zorder=2)
+
+    if title is None:
+        title = gene_id
+        if classifications is not None and gene_id in classifications.index:
+            row = classifications.loc[gene_id]
+            parts = []
+            if "tau_mean" in row.index and pd.notna(row["tau_mean"]):
+                parts.append(f"τ={row['tau_mean']:.2f}")
+            if "phase_mean" in row.index and pd.notna(row["phase_mean"]):
+                parts.append(f"φ={row['phase_mean']:.1f}h")
+            if parts:
+                title += "\n" + "  ".join(parts)
+            if "pirs_score" in row.index and pd.notna(row["pirs_score"]):
+                title += f"\nPIRS={row['pirs_score']:.3f}"
+
+    ax.set_title(title)
+    ax.set_xlabel("ZT (h)")
+    ax.set_ylabel("Expression")
+    ax.set_xticks(unique_tp)
+    sns.despine(ax=ax)
+    return ax
+
+
+# Per-label column and sort direction for representative gene selection
+_LABEL_SELECT_COL = {
+    "constitutive":   ("pirs_score", True),   # ascending PIRS → most stable
+    "rhythmic":       ("tau_mean",   False),  # descending tau → clearest rhythm
+    "noisy_rhythmic": ("tau_mean",   False),
+    "linear":         ("slope_pval", True),   # ascending slope_pval → clearest trend
+    "variable":       ("pirs_score", False),  # descending PIRS → most variable
+    "unclassified":   (None,         True),
+}
+
+
+def expression_heatmap(
+    expression,
+    classifications=None,
+    labels=None,
+    n_per_label=20,
+    z_score=True,
+    method="ward",
+    cmap="RdBu_r",
+    show_gene_labels=None,
+    colorbar=True,
+    ax=None,
+    title="Expression heatmap",
+):
+    """Clustered heatmap of gene expression grouped by label.
+
+    Genes are subsampled per label (most representative first), z-scored
+    across timepoints, and sorted by within-group hierarchical clustering.
+    A narrow color strip on the left side encodes the expression label.
+    White lines separate label groups.
+
+    Parameters
+    ----------
+    expression : pd.DataFrame
+        Expression matrix with ZT/CT-prefixed sample columns, indexed by
+        gene ID.
+    classifications : pd.DataFrame, optional
+        Output of ``Classifier.classify()``.  When provided, genes are
+        grouped and color-coded by label.  If omitted, all genes are
+        clustered together.
+    labels : list of str, optional
+        Labels to include, in display order.  Defaults to all labels in
+        ``_LABEL_ORDER`` present in *classifications*.
+    n_per_label : int
+        Maximum genes per label.  Genes are ranked by the most
+        informative score for each label (lowest PIRS for constitutive,
+        highest TauMean for rhythmic, etc.).  Default 20.
+    z_score : bool
+        Z-score each gene across its timepoint means before plotting
+        (default True).
+    method : str
+        Linkage method for within-group hierarchical clustering
+        (default ``'ward'``).
+    cmap : str
+        Matplotlib colormap name (default ``'RdBu_r'``).
+    show_gene_labels : bool or None
+        Whether to draw gene-ID tick labels.  Auto-detects: shown when
+        ≤ 40 genes, hidden otherwise.
+    colorbar : bool
+        Draw a colorbar for the z-score scale (default True).
+    ax : matplotlib.axes.Axes, optional
+    title : str, optional
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The main heatmap axes.
+    """
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from scipy.cluster.hierarchy import linkage, leaves_list
+
+    ax = _ax(ax)
+    zt_cols, timepoints, unique_tp = _zt_timepoints(expression)
+
+    # Average replicates → one value per gene per unique timepoint
+    tp_mat = pd.DataFrame(
+        {
+            int(tp): expression[[c for c, t in zip(zt_cols, timepoints) if t == tp]].mean(axis=1)
+            for tp in unique_tp
+        },
+        index=expression.index,
+    ).astype(float)
+
+    # -----------------------------------------------------------------------
+    # Gene selection and ordering
+    # -----------------------------------------------------------------------
+    if classifications is not None:
+        common = tp_mat.index.intersection(classifications.index)
+        tp_mat = tp_mat.loc[common]
+        clf = classifications.loc[common]
+
+        if labels is None:
+            labels = [l for l in _LABEL_ORDER if l in clf["label"].values]
+
+        ordered_genes: list = []
+        gene_label_list: list = []
+
+        for lbl in labels:
+            mask = clf["label"] == lbl
+            genes = clf[mask].index.tolist()
+            if not genes:
+                continue
+
+            n = min(n_per_label, len(genes))
+            col, ascending = _LABEL_SELECT_COL.get(lbl, ("pirs_score", True))
+            if col and col in clf.columns and clf[col].notna().any():
+                ranked = clf.loc[genes, col].dropna()
+                genes = (
+                    ranked.nsmallest(n) if ascending else ranked.nlargest(n)
+                ).index.tolist()
+            else:
+                genes = genes[:n]
+
+            sub = tp_mat.loc[genes].values
+            if len(sub) > 2:
+                order = leaves_list(linkage(sub, method=method))
+                genes = [genes[i] for i in order]
+
+            ordered_genes.extend(genes)
+            gene_label_list.extend([lbl] * len(genes))
+    else:
+        max_genes = n_per_label * len(_LABEL_ORDER)
+        genes = tp_mat.index.tolist()
+        if len(genes) > max_genes:
+            step = max(1, len(genes) // max_genes)
+            genes = genes[::step][:max_genes]
+        sub = tp_mat.loc[genes].values
+        if len(sub) > 2:
+            order = leaves_list(linkage(sub, method=method))
+            genes = [genes[i] for i in order]
+        ordered_genes = genes
+        gene_label_list = None
+
+    if not ordered_genes:
+        ax.set_title(title)
+        ax.text(0.5, 0.5, "No genes to display", transform=ax.transAxes,
+                ha="center", va="center", color="#888888")
+        return ax
+
+    mat = tp_mat.loc[ordered_genes].values
+    n_genes, n_tp = mat.shape
+
+    # -----------------------------------------------------------------------
+    # Z-score each gene
+    # -----------------------------------------------------------------------
+    if z_score:
+        row_mean = mat.mean(axis=1, keepdims=True)
+        row_std = mat.std(axis=1, keepdims=True)
+        row_std[row_std == 0] = 1.0
+        mat = (mat - row_mean) / row_std
+
+    vmax = float(np.nanpercentile(np.abs(mat), 99))
+    vmax = max(vmax, 0.5)
+
+    # -----------------------------------------------------------------------
+    # Draw heatmap
+    # -----------------------------------------------------------------------
+    im = ax.imshow(
+        mat,
+        aspect="auto",
+        cmap=cmap,
+        vmin=-vmax,
+        vmax=vmax,
+        interpolation="nearest",
+    )
+
+    # White lines between label groups
+    if gene_label_list is not None:
+        boundary = 0
+        for lbl in (labels or []):
+            cnt = gene_label_list.count(lbl)
+            boundary += cnt
+            if 0 < boundary < n_genes:
+                ax.axhline(boundary - 0.5, color="white", lw=1.2)
+
+    # X-axis: unique timepoints
+    ax.set_xticks(range(n_tp))
+    ax.set_xticklabels([f"ZT{int(tp):02d}" for tp in unique_tp], fontsize=8)
+
+    # Y-axis: gene IDs (auto-hide above threshold)
+    show_labels = show_gene_labels if show_gene_labels is not None else (n_genes <= 40)
+    if show_labels:
+        ax.set_yticks(range(n_genes))
+        ax.set_yticklabels(ordered_genes, fontsize=7)
+    else:
+        ax.set_yticks([])
+
+    ax.set_title(title)
+
+    # -----------------------------------------------------------------------
+    # Label color strip and colorbar via AxesDivider
+    # -----------------------------------------------------------------------
+    divider = make_axes_locatable(ax)
+
+    if gene_label_list is not None:
+        cax_strip = divider.append_axes("left", size="4%", pad=0.05)
+        rgb = np.array(
+            [plt.matplotlib.colors.to_rgb(LABEL_COLORS.get(l, "#8C8C8C"))
+             for l in gene_label_list],
+            dtype=float,
+        ).reshape(n_genes, 1, 3)
+        cax_strip.imshow(rgb, aspect="auto", interpolation="nearest")
+        cax_strip.set_xticks([])
+        cax_strip.set_yticks([])
+
+    if colorbar:
+        cax_cb = divider.append_axes("right", size="4%", pad=0.08)
+        cb = plt.colorbar(im, cax=cax_cb)
+        cb.set_label("z-score" if z_score else "expression", fontsize=8)
+
     return ax
 
 

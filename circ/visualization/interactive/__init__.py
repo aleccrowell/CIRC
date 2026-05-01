@@ -46,12 +46,17 @@ from circ.visualization.interactive.classify import (
     phase_wheel,
     period_distribution,
     phase_amplitude_scatter,
+    expression_heatmap,
     top_constitutive_candidates,
     classification_summary,
 )
 from circ.visualization.interactive.benchmarks import (
     classification_pr,
     classification_roc,
+)
+from circ.visualization.interactive.compare import (
+    rhythmicity_shift_scatter,
+    delta_tau_volcano,
 )
 
 __all__ = [
@@ -66,8 +71,11 @@ __all__ = [
     "phase_wheel",
     "period_distribution",
     "phase_amplitude_scatter",
+    "expression_heatmap",
     "top_constitutive_candidates",
     "classification_summary",
     "classification_pr",
     "classification_roc",
+    "rhythmicity_shift_scatter",
+    "delta_tau_volcano",
 ]

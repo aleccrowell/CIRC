@@ -7,7 +7,6 @@ called directly with pre-computed data.
 Metric-only functions (no matplotlib) live in ``circ.evaluation``.
 """
 
-import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
     average_precision_score,
@@ -16,14 +15,7 @@ from sklearn.metrics import (
     auc,
 )
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _ax(ax):
-    return ax if ax is not None else plt.subplots()[1]
+from circ.visualization.classify import _ax
 
 
 # ---------------------------------------------------------------------------

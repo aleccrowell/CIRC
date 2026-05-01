@@ -26,10 +26,7 @@ import matplotlib
 if "--show" not in sys.argv:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from circ.simulations import simulate
 from circ.expression_classification.classify import Classifier
@@ -68,11 +65,6 @@ result = clf.run_all(
 )
 print(result["label"].value_counts().to_string(), "\n")
 
-# Timepoint metadata — reused across all profile plots
-zt_cols    = [c for c in expression.columns if c.startswith(("ZT", "CT"))]
-timepoints = [int(c.replace("ZT", "").replace("CT", "").split("_")[0]) for c in zt_cols]
-unique_tp  = sorted(set(timepoints))
-
 # ---------------------------------------------------------------------------
 # 2. Select top hits
 # ---------------------------------------------------------------------------
@@ -86,31 +78,6 @@ top_constitutive = const_genes.nsmallest(9, "pirs_score")
 
 print(f"Top 9 rhythmic genes (by TauMean):     {top_rhythmic.index.tolist()}")
 print(f"Top 9 constitutive genes (by PIRS):    {top_constitutive.index.tolist()}\n")
-
-
-# ---------------------------------------------------------------------------
-# Helper — plot one gene's time-series (replicates + mean line)
-# ---------------------------------------------------------------------------
-def _gene_profile(ax, gene_id, color):
-    vals    = expression.loc[gene_id, zt_cols].astype(float).values
-    scatter = ax.scatter(timepoints, vals, color=color, s=14, alpha=0.55, zorder=3)
-    means   = [vals[[i for i, t in enumerate(timepoints) if t == tp]].mean()
-               for tp in unique_tp]
-    ax.plot(unique_tp, means, color=color, lw=1.5, zorder=2)
-
-    row   = result.loc[gene_id]
-    title = gene_id
-    if "tau_mean" in row.index and pd.notna(row["tau_mean"]):
-        title += f"\nτ={row['tau_mean']:.2f}"
-    if "phase_mean" in row.index and pd.notna(row["phase_mean"]):
-        title += f"  φ={row['phase_mean']:.1f} h"
-    if "pirs_score" in row.index and pd.notna(row["pirs_score"]):
-        title += f"\nPIRS={row['pirs_score']:.3f}"
-
-    ax.set_title(title, fontsize=7)
-    ax.set_xlabel("ZT (h)", fontsize=7)
-    ax.tick_params(labelsize=6)
-    sns.despine(ax=ax)
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +99,13 @@ viz.mean_expression_profiles(expression, result, ax=ax_mean,
 # Right 4 columns (2×4 = 8 panels, but we only have 9 genes; reshape to 3×3)
 # Use a nested gridspec for the gallery
 gs_gallery = gs[:, 1:].subgridspec(3, 3, hspace=0.6, wspace=0.4)
-color = LABEL_COLORS["rhythmic"]
 for idx, gene_id in enumerate(top_rhythmic.index):
     r, c = divmod(idx, 3)
     ax   = fig.add_subplot(gs_gallery[r, c])
-    _gene_profile(ax, gene_id, color)
+    viz.gene_profile(expression, gene_id, result, ax=ax)
+    ax.set_title(ax.get_title(), fontsize=7)
+    ax.set_xlabel(ax.get_xlabel(), fontsize=7)
+    ax.tick_params(labelsize=6)
 
 fig.suptitle("Top rhythmic genes — individual profiles (τ ranked)", fontsize=11)
 fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -164,11 +133,13 @@ viz.mean_expression_profiles(expression, result,
                               title="Mean profile\n(constitutive / variable)")
 
 gs_gallery = gs[:, 1:].subgridspec(3, 3, hspace=0.6, wspace=0.4)
-color = LABEL_COLORS["constitutive"]
 for idx, gene_id in enumerate(top_constitutive.index):
     r, c = divmod(idx, 3)
     ax   = fig.add_subplot(gs_gallery[r, c])
-    _gene_profile(ax, gene_id, color)
+    viz.gene_profile(expression, gene_id, result, ax=ax)
+    ax.set_title(ax.get_title(), fontsize=7)
+    ax.set_xlabel(ax.get_xlabel(), fontsize=7)
+    ax.tick_params(labelsize=6)
 
 fig.suptitle("Top constitutive gene candidates — individual profiles (PIRS ranked)",
              fontsize=11)
@@ -179,7 +150,29 @@ plt.close(fig)
 print(f"  saved → {out}")
 
 # ---------------------------------------------------------------------------
-# 5. Annotated decision space
+# 5. Expression heatmap — population-level view grouped by label
+#
+# Complements the individual profile galleries by showing all representative
+# genes in a single heatmap.  Within each label group genes are sorted by
+# hierarchical clustering on their z-scored expression patterns.
+# ---------------------------------------------------------------------------
+print("Section 3: Expression heatmap …")
+
+fig, ax = plt.subplots(figsize=(8, 9))
+viz.expression_heatmap(
+    expression, result,
+    n_per_label=12,
+    ax=ax,
+    title="Clustered expression by label",
+)
+fig.tight_layout()
+out = FIGURES / "23_expression_heatmap.png"
+fig.savefig(out, dpi=150, bbox_inches="tight")
+plt.close(fig)
+print(f"  saved → {out}")
+
+# ---------------------------------------------------------------------------
+# 6. Annotated decision space
 #
 # Overlays gene-ID labels for the top hits on the pirs_vs_tau plot, so you
 # can see exactly where each candidate sits relative to the decision boundaries.

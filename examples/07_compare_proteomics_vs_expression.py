@@ -122,12 +122,13 @@ print(result_rna["label"].value_counts().to_string(), "\n")
 # ---------------------------------------------------------------------------
 print("Section 1: Per-layer label distributions …")
 
+xmax = max(
+    result_prot["label"].value_counts().max(),
+    result_rna["label"].value_counts().max(),
+) * 1.15
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
-viz.label_distribution(result_prot, ax=axes[0], title=LAYER_LABELS[0])
-viz.label_distribution(result_rna,  ax=axes[1], title=LAYER_LABELS[1])
-xmax = max(axes[0].get_xlim()[1], axes[1].get_xlim()[1])
-for ax in axes:
-    ax.set_xlim(0, xmax)
+viz.label_distribution(result_prot, ax=axes[0], title=LAYER_LABELS[0], xlim=xmax)
+viz.label_distribution(result_rna,  ax=axes[1], title=LAYER_LABELS[1], xlim=xmax)
 plt.tight_layout()
 out = FIGURES / "31_layer_label_distributions.png"
 fig.savefig(out, dpi=150, bbox_inches="tight")

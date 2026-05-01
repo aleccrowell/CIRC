@@ -19,6 +19,8 @@ from circ.visualization.classify import (
     slope_vs_rhythm,
     phase_wheel,
     period_distribution,
+    gene_profile,
+    expression_heatmap,
     classification_summary,
 )
 
@@ -66,6 +68,15 @@ def with_linear(full_clf):
     extra.index = [f'lin{i}' for i in range(10)]
     extra['label'] = 'linear'
     return pd.concat([full_clf, extra])
+
+
+@pytest.fixture
+def expression_df(minimal_clf):
+    """Tiny expression matrix with ZT columns aligned to minimal_clf index."""
+    rng = np.random.default_rng(5)
+    n = len(minimal_clf)
+    cols = [f'ZT{h:02d}_{r}' for h in [0, 4, 8, 12, 16, 20] for r in [1, 2]]
+    return pd.DataFrame(rng.normal(5, 1, (n, len(cols))), index=minimal_clf.index, columns=cols)
 
 
 @pytest.fixture(autouse=True)
@@ -299,13 +310,13 @@ class TestClassificationSummary:
         fig = classification_summary(minimal_clf)
         assert isinstance(fig, plt.Figure)
         # always: label_distribution + pirs_vs_tau + pirs_score_distribution
-        #         + top_constitutive_candidates = 4
-        assert len(fig.axes) == 4
+        #         + top_constitutive_candidates + threshold_sensitivity = 5
+        assert len(fig.axes) == 5
 
     def test_returns_figure_full(self, full_clf):
         fig = classification_summary(full_clf)
         assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) > 4
+        assert len(fig.axes) > 5
 
     def test_saves_to_file(self, full_clf, tmp_path):
         out = str(tmp_path / 'summary.png')
@@ -316,13 +327,132 @@ class TestClassificationSummary:
     def test_minimal_has_correct_panel_count(self, minimal_clf):
         fig = classification_summary(minimal_clf)
         # label_distribution + pirs_vs_tau + pirs_score_distribution
-        # + top_constitutive_candidates = 4
-        assert len(fig.axes) == 4
+        # + top_constitutive_candidates + threshold_sensitivity = 5
+        assert len(fig.axes) == 5
 
     def test_with_emp_p_adds_two_panels(self, minimal_clf):
         df = minimal_clf.copy()
         rng = np.random.default_rng(2)
         df['emp_p'] = rng.uniform(0, 1, len(df))
         fig = classification_summary(df)
-        # 4 base + 2 (volcano + tau_pval_scatter) = 6
-        assert len(fig.axes) == 6
+        # 5 base + 2 (volcano + tau_pval_scatter) = 7
+        assert len(fig.axes) == 7
+
+
+# ---------------------------------------------------------------------------
+# label_distribution xlim
+# ---------------------------------------------------------------------------
+
+class TestLabelDistributionXlim:
+    def test_xlim_applied(self, minimal_clf):
+        ax = label_distribution(minimal_clf, xlim=500)
+        assert ax.get_xlim()[1] == pytest.approx(500)
+
+    def test_xlim_none_leaves_default(self, minimal_clf):
+        ax = label_distribution(minimal_clf)
+        assert ax.get_xlim()[1] != pytest.approx(500)
+
+
+# ---------------------------------------------------------------------------
+# gene_profile
+# ---------------------------------------------------------------------------
+
+class TestGeneProfile:
+    def test_returns_axes(self, expression_df, minimal_clf):
+        gene = expression_df.index[0]
+        ax = gene_profile(expression_df, gene, minimal_clf)
+        assert isinstance(ax, matplotlib.axes.Axes)
+
+    def test_accepts_explicit_ax(self, expression_df, minimal_clf):
+        _, ax = plt.subplots()
+        gene = expression_df.index[0]
+        returned = gene_profile(expression_df, gene, minimal_clf, ax=ax)
+        assert returned is ax
+
+    def test_title_contains_gene_id(self, expression_df, minimal_clf):
+        gene = expression_df.index[3]
+        ax = gene_profile(expression_df, gene, minimal_clf)
+        assert gene in ax.get_title()
+
+    def test_custom_title(self, expression_df, minimal_clf):
+        gene = expression_df.index[0]
+        ax = gene_profile(expression_df, gene, minimal_clf, title="My title")
+        assert ax.get_title() == "My title"
+
+    def test_raises_on_missing_gene(self, expression_df, minimal_clf):
+        with pytest.raises(ValueError, match='not found'):
+            gene_profile(expression_df, 'nonexistent_gene', minimal_clf)
+
+    def test_works_without_classifications(self, expression_df):
+        gene = expression_df.index[0]
+        ax = gene_profile(expression_df, gene)
+        assert isinstance(ax, matplotlib.axes.Axes)
+
+    def test_scatter_and_line_drawn(self, expression_df, minimal_clf):
+        gene = expression_df.index[0]
+        ax = gene_profile(expression_df, gene, minimal_clf)
+        assert len(ax.collections) >= 1   # scatter
+        assert len(ax.lines) >= 1         # mean line
+
+    def test_color_from_label(self, expression_df, minimal_clf):
+        gene = minimal_clf[minimal_clf['label'] == 'rhythmic'].index[0]
+        ax = gene_profile(expression_df, gene, minimal_clf)
+        scatter_color = ax.collections[0].get_facecolors()[0][:3]  # RGB only; alpha set by scatter
+        expected = plt.matplotlib.colors.to_rgb(LABEL_COLORS['rhythmic'])
+        np.testing.assert_allclose(scatter_color, expected, atol=0.01)
+
+
+# ---------------------------------------------------------------------------
+# expression_heatmap
+# ---------------------------------------------------------------------------
+
+class TestExpressionHeatmap:
+    def test_returns_axes(self, expression_df, minimal_clf):
+        ax = expression_heatmap(expression_df, minimal_clf)
+        assert isinstance(ax, matplotlib.axes.Axes)
+
+    def test_works_without_classifications(self, expression_df):
+        ax = expression_heatmap(expression_df)
+        assert isinstance(ax, matplotlib.axes.Axes)
+
+    def test_accepts_explicit_ax(self, expression_df, minimal_clf):
+        _, ax = plt.subplots()
+        returned = expression_heatmap(expression_df, minimal_clf, ax=ax)
+        assert returned is ax
+
+    def test_heatmap_drawn(self, expression_df, minimal_clf):
+        ax = expression_heatmap(expression_df, minimal_clf)
+        # imshow produces an AxesImage in ax.images
+        assert len(ax.images) >= 1
+
+    def test_n_per_label_limits_rows(self, expression_df, minimal_clf):
+        ax = expression_heatmap(expression_df, minimal_clf, n_per_label=3)
+        img = ax.images[0]
+        n_labels = minimal_clf['label'].nunique()
+        assert img.get_array().shape[0] <= 3 * n_labels
+
+    def test_colorbar_present(self, expression_df, minimal_clf):
+        ax = expression_heatmap(expression_df, minimal_clf, colorbar=True)
+        fig = ax.get_figure()
+        # colorbar creates an extra axes in the figure
+        assert len(fig.axes) >= 2
+
+    def test_no_colorbar(self, expression_df, minimal_clf):
+        _, ax = plt.subplots()
+        expression_heatmap(expression_df, minimal_clf, colorbar=False)
+        fig = ax.get_figure()
+        # label strip adds one extra axes, but no colorbar
+        assert len(fig.axes) <= 2
+
+    def test_custom_title(self, expression_df, minimal_clf):
+        ax = expression_heatmap(expression_df, minimal_clf, title="My heatmap")
+        assert ax.get_title() == "My heatmap"
+
+    def test_raises_on_no_zt_columns(self, minimal_clf):
+        bad_expr = pd.DataFrame(
+            np.ones((10, 4)),
+            index=minimal_clf.index[:10],
+            columns=['A', 'B', 'C', 'D'],
+        )
+        with pytest.raises(ValueError, match='ZT/CT'):
+            expression_heatmap(bad_expr, minimal_clf)
