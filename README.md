@@ -9,7 +9,7 @@ integrating four complementary tools:
 | `circ.pirs` | Prediction Interval Ranking Score for constitutive expression |
 | `circ.bootjtk` | Bootstrap empirical JTK circadian rhythm detection |
 | `circ.expression_classification` | Unified classifier combining PIRS and BooteJTK |
-| `circ.visualization` | Classification and benchmark plots |
+| `circ.visualization` | Classification, comparison, and benchmark plots |
 | `circ.compare` | Cross-condition and cross-omics comparison |
 
 A single `circ` CLI entry point wraps all three core tools, and all modules share

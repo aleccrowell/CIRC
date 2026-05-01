@@ -42,17 +42,19 @@ and cleaned up automatically when the script exits.
 ### 01 — Classify and explore ([`01_classify_and_explore.py`](01_classify_and_explore.py))
 
 **Starting point for new users.**  Simulates a standard expression dataset,
-classifies it with `Classifier.run_all()`, and produces three focused views:
+classifies it with `Classifier.run_all()`, and produces four focused views:
 
-- Dataset overview (label distribution, PIRS vs τ, phase wheel)
+- Dataset overview (label distribution, PIRS score distribution, mean
+  expression profiles, and a clustered expression heatmap)
 - Rhythmicity detail (amplitude histogram, phase–amplitude scatter,
   top rhythmic profiles)
 - Constitutive characterization (top constitutive candidates, mean profiles
   by label)
+- Decision space and classification summary
 
 ![Classification overview](../docs/figures/01_overview.png)
 
-Figures saved: `01_` – `04_`
+Figures saved: `01_`, `01b_`, `02_` – `04_`
 
 ---
 
@@ -114,9 +116,11 @@ Figures saved: `15_` – `20_`
 
 Drilling into individual genes / proteins after classification:
 
-- Profile gallery for the top-N rhythmic hits (raw traces + fitted cosine)
+- Profile gallery for the top-N rhythmic hits (replicate scatter + mean line,
+  color-coded by label, annotated with τ and PIRS)
 - Profile gallery for the top-N constitutive candidates
-- Side-by-side comparison of a rhythmic and a constitutive profile
+- Clustered expression heatmap grouping all representative genes by label
+- Annotated decision space and interactive gene explorer (HTML)
 
 Useful for manual review of hits before follow-up experiments.
 
@@ -166,11 +170,11 @@ different scripts can coexist in `./figures/` without collisions:
 
 | Script | Figure range |
 |---|---|
-| 01 | 01 – 04 |
+| 01 | 01, 01b, 02 – 04 |
 | 02 | 05 – 09 |
 | 03 | 10 – 14 |
 | 04 | 15 – 20 |
-| 05 | 21 – 25 |
+| 05 | 21 – 25 (incl. 23 expression heatmap) |
 | 06 | 26 – 30 |
 | 07 | 31 – 33 |
 
