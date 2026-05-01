@@ -20,6 +20,7 @@ Both return a long-format DataFrame with columns:
     ID, Time, Mean, SD, SDpre, N
 which is the format expected by ``limma_preprocess.write_limma_outputs``.
 """
+
 import warnings
 
 import numpy as np
@@ -30,6 +31,7 @@ from scipy.special import polygamma
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _timepoint_groups(df, period):
     """Yield (time_mod_period, column_subset) for each unique ZT bucket."""
@@ -90,9 +92,9 @@ def _estimate_prior(sds, dfs):
     if len(s) < 3:
         return 0.0, fallback_s0
 
-    dg_fn  = lambda x: polygamma(0, x)   # digamma
-    tg_fn  = lambda x: polygamma(1, x)   # trigamma
-    ttg_fn = lambda x: polygamma(2, x)   # tetragamma
+    dg_fn = lambda x: polygamma(0, x)  # digamma
+    tg_fn = lambda x: polygamma(1, x)  # trigamma
+    ttg_fn = lambda x: polygamma(2, x)  # tetragamma
 
     def _solve_trigamma(x):
         """Solve trigamma(y) = x via Newton iteration (x > 0)."""
@@ -136,6 +138,7 @@ def _posterior_sd(sd_pre, dfs, d0, s0):
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def run_vooma_ebayes(df_wide, period, rnaseq=False):
     """
     Python equivalent of ``Limma_voom_core.R``.
@@ -161,17 +164,17 @@ def run_vooma_ebayes(df_wide, period, rnaseq=False):
     """
     long = _vooma_stats(df_wide, period)
     d0, s0 = _estimate_prior(long["sd_pre"].to_numpy(), long["df"].to_numpy())
-    long["SD"] = _posterior_sd(
-        long["sd_pre"].to_numpy(), long["df"].to_numpy(), d0, s0
+    long["SD"] = _posterior_sd(long["sd_pre"].to_numpy(), long["df"].to_numpy(), d0, s0)
+    return pd.DataFrame(
+        {
+            "ID": long["gene"].to_numpy(),
+            "Time": long["time"].to_numpy(),
+            "Mean": long["mean"].to_numpy(),
+            "SD": long["SD"].to_numpy(),
+            "SDpre": long["sd_pre"].to_numpy(),
+            "N": long["n"].to_numpy(),
+        }
     )
-    return pd.DataFrame({
-        "ID":    long["gene"].to_numpy(),
-        "Time":  long["time"].to_numpy(),
-        "Mean":  long["mean"].to_numpy(),
-        "SD":    long["SD"].to_numpy(),
-        "SDpre": long["sd_pre"].to_numpy(),
-        "N":     long["n"].to_numpy(),
-    })
 
 
 def _impute_na(df):

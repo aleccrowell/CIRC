@@ -25,6 +25,7 @@ Benchmark / evaluation plots
    classification_pr
    classification_roc
 """
+
 try:
     import plotly.graph_objects  # noqa: F401
 except ImportError as exc:
@@ -54,19 +55,19 @@ from circ.visualization.interactive.benchmarks import (
 )
 
 __all__ = [
-    'label_distribution',
-    'pirs_vs_tau',
-    'volcano',
-    'pirs_score_distribution',
-    'tau_pval_scatter',
-    'pirs_pval_scatter',
-    'slope_pval_scatter',
-    'slope_vs_rhythm',
-    'phase_wheel',
-    'period_distribution',
-    'phase_amplitude_scatter',
-    'top_constitutive_candidates',
-    'classification_summary',
-    'classification_pr',
-    'classification_roc',
+    "label_distribution",
+    "pirs_vs_tau",
+    "volcano",
+    "pirs_score_distribution",
+    "tau_pval_scatter",
+    "pirs_pval_scatter",
+    "slope_pval_scatter",
+    "slope_vs_rhythm",
+    "phase_wheel",
+    "period_distribution",
+    "phase_amplitude_scatter",
+    "top_constitutive_candidates",
+    "classification_summary",
+    "classification_pr",
+    "classification_roc",
 ]

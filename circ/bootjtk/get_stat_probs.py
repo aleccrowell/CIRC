@@ -6,11 +6,13 @@ import numpy as np
 
 try:
     import numba as _numba
+
     _NUMBA = True
 except ImportError:
     _NUMBA = False
 
 if _NUMBA:
+
     @_numba.njit(cache=True)
     def _batch_tau_nb(kkey_arr, ref_ranks):
         """Tau-b of kkey_arr (T,) against every row of ref_ranks (N, T) → (N,)."""
@@ -38,15 +40,15 @@ if _NUMBA:
                         else:
                             d += 1
             denom = nx * ny_i
-            taus[i] = (c - d) / (denom ** 0.5) if denom > 0 else 0.0
+            taus[i] = (c - d) / (denom**0.5) if denom > 0 else 0.0
         return taus
 
 
 def _batch_tau_numpy(kkey_arr, ref_ranks):
     """Vectorized tau-b fallback: kkey_arr (T,) vs ref_ranks (N, T) → (N,)."""
-    sx = np.sign(kkey_arr[:, None] - kkey_arr[None, :])              # (T, T)
-    sy = np.sign(ref_ranks[:, :, None] - ref_ranks[:, None, :])       # (N, T, T)
-    num = np.einsum('ij,nij->n', sx, sy) / 2.0                        # (N,)
+    sx = np.sign(kkey_arr[:, None] - kkey_arr[None, :])  # (T, T)
+    sy = np.sign(ref_ranks[:, :, None] - ref_ranks[:, None, :])  # (N, T, T)
+    num = np.einsum("ij,nij->n", sx, sy) / 2.0  # (N,)
     nx = float(np.count_nonzero(sx)) / 2.0
     ny = np.count_nonzero(sy.reshape(len(ref_ranks), -1), axis=1).astype(float) / 2.0
     denom = np.sqrt(nx * ny)
@@ -92,15 +94,17 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
         phase_col = np.where(neg_mask, nadirs, phases)
         nadir_col = np.where(neg_mask, phases, nadirs)
 
-        res = np.column_stack([
-            abs_taus,
-            np.zeros(len(triples)),
-            periods,
-            phase_col,
-            nadir_col,
-            np.full(len(triples), maxloc),
-            np.full(len(triples), minloc),
-        ])
+        res = np.column_stack(
+            [
+                abs_taus,
+                np.zeros(len(triples)),
+                periods,
+                phase_col,
+                nadir_col,
+                np.full(len(triples), maxloc),
+                np.full(len(triples), minloc),
+            ]
+        )
 
         r = pick_best_match(res)
         d_taugene[r[0]] = d_taugene.get(r[0], 0) + dorder[kkey]
@@ -108,7 +112,7 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
         d_phgene[r[3]] = d_phgene.get(r[3], 0) + dorder[kkey]
         d_nagene[r[4]] = d_nagene.get(r[4], 0) + dorder[kkey]
         count = counts[kkey]
-        rs[rs_idx:rs_idx + count] = r
+        rs[rs_idx : rs_idx + count] = r
         rs_idx += count
     m_tau = np.mean(rs[:, 0])
     s_tau = np.std(rs[:, 0])
@@ -118,30 +122,37 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
     s_ph = sscircstd(rs[:, 3], high=24, low=0)
     m_na = sscircmean(rs[:, 4], high=24, low=0)
     s_na = sscircstd(rs[:, 4], high=24, low=0)
-    return [m_per, s_per, m_ph, s_ph, m_na, s_na], [m_tau, s_tau], d_taugene, d_pergene, d_phgene, d_nagene
+    return (
+        [m_per, s_per, m_ph, s_ph, m_na, s_na],
+        [m_tau, s_tau],
+        d_taugene,
+        d_pergene,
+        d_phgene,
+        d_nagene,
+    )
 
 
-def generate_base_reference(header, waveform="cosine", period=24., phase=0., width=12.):
+def generate_base_reference(
+    header, waveform="cosine", period=24.0, phase=0.0, width=12.0
+):
     ZTs = np.array(header, dtype=float)
     coef = 2.0 * np.pi / period
     w = (width * coef) % (2.0 * np.pi)
     tpoints = ((ZTs - phase) * coef) % (2.0 * np.pi)
-    if waveform == 'cosine':
+    if waveform == "cosine":
         return np.where(
             tpoints <= w,
             np.cos(tpoints / (w / np.pi)),
-            np.cos((tpoints + 2.0 * (np.pi - w)) * np.pi / (2.0 * np.pi - w))
+            np.cos((tpoints + 2.0 * (np.pi - w)) * np.pi / (2.0 * np.pi - w)),
         )
-    elif waveform == 'trough':
+    elif waveform == "trough":
         return np.where(
-            tpoints <= w,
-            1.0 - tpoints / w,
-            (tpoints - w) / (2.0 * np.pi - w)
+            tpoints <= w, 1.0 - tpoints / w, (tpoints - w) / (2.0 * np.pi - w)
         )
-    elif waveform == 'impulse':
+    elif waveform == "impulse":
         d = np.minimum(tpoints, np.abs(2.0 * np.pi - tpoints))
         return np.maximum(-2.0 * d / (3.0 * np.pi / 4.0) + 1.0, 0.0)
-    elif waveform == 'step':
+    elif waveform == "step":
         return np.where(tpoints < np.pi, 1.0, 0.0)
 
 
@@ -152,28 +163,28 @@ def farctanh(x):
 def periodic(x):
     x = float(x)
     while x > 12:
-        x -= 24.
+        x -= 24.0
     while x <= -12:
-        x += 24.
+        x += 24.0
     return x
 
 
 def pick_best_match(res):
     res = np.array(res)
     taus = res[:, 0]
-    tau_mask = (max(taus) == taus)
+    tau_mask = max(taus) == taus
     if np.sum(tau_mask) == 1:
         return res[int(np.argmax(tau_mask))]
 
     res = res[tau_mask]
     phases = np.abs(res[:, 3] - res[:, 5])
-    phasemask = (min(phases) == phases)
+    phasemask = min(phases) == phases
     if np.sum(phasemask) == 1:
         return res[int(np.argmax(phasemask))]
 
     res = res[phasemask]
     diffs = np.abs(res[:, 4] - res[:, 6])
-    diffmask = (min(diffs) == diffs)
+    diffmask = min(diffs) == diffs
     if np.sum(diffmask) == 1:
         return res[int(np.argmax(diffmask))]
 
@@ -195,7 +206,7 @@ def get_waveform_list(periods, phases, widths):
     return np.array(triples, dtype=float)
 
 
-def make_references(new_header, triples, waveform='cosine'):
+def make_references(new_header, triples, waveform="cosine"):
     dref = {}
     for triple in triples:
         period, phase, width = triple

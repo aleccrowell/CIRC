@@ -30,6 +30,7 @@ Statistical methods
 
 Both tests apply Benjamini–Hochberg FDR correction across all tested genes.
 """
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -38,6 +39,7 @@ from scipy import stats
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def aggregate_to_protein(result):
     """Aggregate peptide-level classifier results to the protein level.
@@ -68,29 +70,33 @@ def aggregate_to_protein(result):
     if not isinstance(result.index, pd.MultiIndex):
         return result.copy()
 
-    protein = result.index.get_level_values('Protein')
+    protein = result.index.get_level_values("Protein")
     df = result.copy()
-    df.index = pd.Index(protein, name='Protein')
+    df.index = pd.Index(protein, name="Protein")
 
-    numeric_cols = set(df.select_dtypes(include='number').columns)
+    numeric_cols = set(df.select_dtypes(include="number").columns)
     agg = {}
     for col in df.columns:
-        if col == 'phase_mean':
+        if col == "phase_mean":
             continue
-        elif col == 'label':
+        elif col == "label":
             agg[col] = _majority_label
         elif col in numeric_cols:
-            agg[col] = 'mean'
+            agg[col] = "mean"
 
-    out = df.groupby(df.index, sort=False).agg(agg) if agg else pd.DataFrame(index=df.index.unique())
+    out = (
+        df.groupby(df.index, sort=False).agg(agg)
+        if agg
+        else pd.DataFrame(index=df.index.unique())
+    )
 
-    if 'phase_mean' in df.columns:
-        angles = 2 * np.pi * df['phase_mean'].values / 24.0
+    if "phase_mean" in df.columns:
+        angles = 2 * np.pi * df["phase_mean"].values / 24.0
         sin_s = pd.Series(np.sin(angles), index=df.index)
         cos_s = pd.Series(np.cos(angles), index=df.index)
         sin_mean = sin_s.groupby(df.index, sort=False).mean()
         cos_mean = cos_s.groupby(df.index, sort=False).mean()
-        out['phase_mean'] = (np.arctan2(sin_mean, cos_mean) * 24 / (2 * np.pi)) % 24
+        out["phase_mean"] = (np.arctan2(sin_mean, cos_mean) * 24 / (2 * np.pi)) % 24
 
     return out.reindex(columns=[c for c in result.columns if c in out.columns])
 
@@ -140,7 +146,7 @@ def compare_conditions(
         * ``phase_pval``, ``phase_padj`` — z-test on phase shift
           (only for genes rhythmic in both conditions)
     """
-    for _name, _res in (('result_A', result_A), ('result_B', result_B)):
+    for _name, _res in (("result_A", result_A), ("result_B", result_B)):
         if isinstance(_res.index, pd.MultiIndex):
             raise ValueError(
                 f"{_name} has a MultiIndex (peptide-level proteomics data). "
@@ -162,45 +168,48 @@ def compare_conditions(
 
     out = pd.DataFrame(index=shared)
     out.index.name = A.index.name
-    out['label_A'] = A['label']
-    out['label_B'] = B['label']
+    out["label_A"] = A["label"]
+    out["label_B"] = B["label"]
 
     rhythmic_A = _is_rhythmic(A, emp_p_threshold, tau_threshold)
     rhythmic_B = _is_rhythmic(B, emp_p_threshold, tau_threshold)
-    out['rhythmicity_status'] = _rhythmicity_status(rhythmic_A, rhythmic_B)
+    out["rhythmicity_status"] = _rhythmicity_status(rhythmic_A, rhythmic_B)
 
     # TauMean effect size
-    out['tau_mean_A'] = A['tau_mean']
-    out['tau_mean_B'] = B['tau_mean']
-    out['delta_tau'] = B['tau_mean'].values - A['tau_mean'].values
+    out["tau_mean_A"] = A["tau_mean"]
+    out["tau_mean_B"] = B["tau_mean"]
+    out["delta_tau"] = B["tau_mean"].values - A["tau_mean"].values
 
     # PIRS effect size
-    out['pirs_score_A'] = A['pirs_score']
-    out['pirs_score_B'] = B['pirs_score']
-    out['delta_pirs'] = B['pirs_score'].values - A['pirs_score'].values
+    out["pirs_score_A"] = A["pirs_score"]
+    out["pirs_score_B"] = B["pirs_score"]
+    out["delta_pirs"] = B["pirs_score"].values - A["pirs_score"].values
 
     # Empirical p-values (pass through for reference)
-    for suffix, df in [('_A', A), ('_B', B)]:
-        if 'emp_p' in df.columns:
-            out[f'emp_p{suffix}'] = df['emp_p']
+    for suffix, df in [("_A", A), ("_B", B)]:
+        if "emp_p" in df.columns:
+            out[f"emp_p{suffix}"] = df["emp_p"]
 
     # Phase effect size (circular)
-    if 'phase_mean' in A.columns and 'phase_mean' in B.columns:
-        out['phase_A'] = A['phase_mean']
-        out['phase_B'] = B['phase_mean']
-        raw_diff = _circular_diff(A['phase_mean'].values, B['phase_mean'].values)
-        out['delta_phase'] = raw_diff
+    if "phase_mean" in A.columns and "phase_mean" in B.columns:
+        out["phase_A"] = A["phase_mean"]
+        out["phase_B"] = B["phase_mean"]
+        raw_diff = _circular_diff(A["phase_mean"].values, B["phase_mean"].values)
+        out["delta_phase"] = raw_diff
         # Phase difference is only meaningful when rhythmic in both conditions
-        out.loc[~(rhythmic_A & rhythmic_B), 'delta_phase'] = np.nan
+        out.loc[~(rhythmic_A & rhythmic_B), "delta_phase"] = np.nan
 
     # Significance tests (requires uncertainty columns from BooteJTK)
-    has_uncertainty = (
-        all(c in A.columns for c in ('tau_std', 'n_boots')) and
-        all(c in B.columns for c in ('tau_std', 'n_boots'))
+    has_uncertainty = all(c in A.columns for c in ("tau_std", "n_boots")) and all(
+        c in B.columns for c in ("tau_std", "n_boots")
     )
     if has_uncertainty:
         _tau_test(out, A, B)
-        if 'delta_phase' in out.columns and 'phase_std' in A.columns and 'phase_std' in B.columns:
+        if (
+            "delta_phase" in out.columns
+            and "phase_std" in A.columns
+            and "phase_std" in B.columns
+        ):
             _phase_test(out, A, B)
 
     return out
@@ -221,16 +230,25 @@ def label_change_table(comparison):
         values = gene count.  Labels are ordered by ``_LABEL_ORDER``.
     """
     from circ.visualization.classify import _LABEL_ORDER
-    all_labels = list(dict.fromkeys(
-        [l for l in _LABEL_ORDER if l in comparison['label_A'].values or l in comparison['label_B'].values]
-    ))
-    ct = pd.crosstab(comparison['label_A'], comparison['label_B'])
+
+    all_labels = list(
+        dict.fromkeys(
+            [
+                l
+                for l in _LABEL_ORDER
+                if l in comparison["label_A"].values
+                or l in comparison["label_B"].values
+            ]
+        )
+    )
+    ct = pd.crosstab(comparison["label_A"], comparison["label_B"])
     return ct.reindex(index=all_labels, columns=all_labels, fill_value=0)
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _majority_label(series):
     """Return the most common label; ties broken alphabetically."""
@@ -267,31 +285,33 @@ def _bh_correct(pvals):
 
 def _is_rhythmic(result, emp_p_threshold, tau_threshold):
     """Boolean Series: True if the gene passes rhythmicity thresholds."""
-    has_emp_p = 'emp_p' in result.columns and result['emp_p'].notna().any()
-    has_tau   = 'tau_mean' in result.columns and result['tau_mean'].notna().any()
+    has_emp_p = "emp_p" in result.columns and result["emp_p"].notna().any()
+    has_tau = "tau_mean" in result.columns and result["tau_mean"].notna().any()
     if has_emp_p and has_tau:
-        return (result['emp_p'] < emp_p_threshold) & (result['tau_mean'] >= tau_threshold)
+        return (result["emp_p"] < emp_p_threshold) & (
+            result["tau_mean"] >= tau_threshold
+        )
     elif has_tau:
-        return result['tau_mean'] >= tau_threshold
-    return result['label'].isin(['rhythmic', 'noisy_rhythmic'])
+        return result["tau_mean"] >= tau_threshold
+    return result["label"].isin(["rhythmic", "noisy_rhythmic"])
 
 
 def _rhythmicity_status(rhythmic_A, rhythmic_B):
-    status = pd.Series('maintained_nonrhythmic', index=rhythmic_A.index, dtype=object)
-    status[rhythmic_A  & rhythmic_B]  = 'maintained_rhythmic'
-    status[~rhythmic_A & rhythmic_B]  = 'gained'
-    status[rhythmic_A  & ~rhythmic_B] = 'lost'
+    status = pd.Series("maintained_nonrhythmic", index=rhythmic_A.index, dtype=object)
+    status[rhythmic_A & rhythmic_B] = "maintained_rhythmic"
+    status[~rhythmic_A & rhythmic_B] = "gained"
+    status[rhythmic_A & ~rhythmic_B] = "lost"
     return status
 
 
 def _tau_test(out, A, B):
     """Vectorised Welch's t-test on bootstrap TauMean distributions."""
-    ta = A['tau_mean'].values.astype(float)
-    sa = A['tau_std'].values.astype(float)
-    na = A['n_boots'].values.astype(float)
-    tb = B['tau_mean'].values.astype(float)
-    sb = B['tau_std'].values.astype(float)
-    nb = B['n_boots'].values.astype(float)
+    ta = A["tau_mean"].values.astype(float)
+    sa = A["tau_std"].values.astype(float)
+    na = A["n_boots"].values.astype(float)
+    tb = B["tau_mean"].values.astype(float)
+    sb = B["tau_std"].values.astype(float)
+    nb = B["n_boots"].values.astype(float)
 
     se_a_sq = np.where(na > 1, sa**2 / na, np.nan)
     se_b_sq = np.where(nb > 1, sb**2 / nb, np.nan)
@@ -299,28 +319,28 @@ def _tau_test(out, A, B):
     t = (tb - ta) / se
 
     # Welch–Satterthwaite degrees of freedom
-    df_ws = (se_a_sq + se_b_sq)**2 / (
+    df_ws = (se_a_sq + se_b_sq) ** 2 / (
         se_a_sq**2 / np.maximum(na - 1, 1) + se_b_sq**2 / np.maximum(nb - 1, 1)
     )
     pvals = 2 * stats.t.sf(np.abs(t), df_ws)
     pvals[~np.isfinite(t)] = np.nan
 
-    out['tau_pval'] = pvals
-    out['tau_padj'] = _bh_correct(pvals)
+    out["tau_pval"] = pvals
+    out["tau_padj"] = _bh_correct(pvals)
 
 
 def _phase_test(out, A, B):
     """Vectorised z-test on circular phase shift (genes rhythmic in both)."""
-    delta = out['delta_phase'].values.astype(float)   # NaN where not both rhythmic
-    sa = A['phase_std'].values.astype(float)
-    na = A['n_boots'].values.astype(float)
-    sb = B['phase_std'].values.astype(float)
-    nb = B['n_boots'].values.astype(float)
+    delta = out["delta_phase"].values.astype(float)  # NaN where not both rhythmic
+    sa = A["phase_std"].values.astype(float)
+    na = A["n_boots"].values.astype(float)
+    sb = B["phase_std"].values.astype(float)
+    nb = B["n_boots"].values.astype(float)
 
     se = np.sqrt(sa**2 / np.maximum(na, 1) + sb**2 / np.maximum(nb, 1))
-    z = delta / se                                     # NaN propagates from delta
+    z = delta / se  # NaN propagates from delta
     pvals = 2 * stats.norm.sf(np.abs(z))
     pvals[~np.isfinite(z)] = np.nan
 
-    out['phase_pval'] = pvals
-    out['phase_padj'] = _bh_correct(pvals)
+    out["phase_pval"] = pvals
+    out["phase_padj"] = _bh_correct(pvals)

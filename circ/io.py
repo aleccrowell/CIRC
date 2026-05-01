@@ -1,10 +1,13 @@
 """Shared I/O utilities for reading and writing expression data."""
+
 from pathlib import Path
 
 import pandas as pd
 
 
-def read_expression(source, data_type='r'):
+def read_expression(
+    source: str | Path | pd.DataFrame, data_type: str = "r"
+) -> pd.DataFrame:
     """Read an expression DataFrame from a file path, or return one unchanged.
 
     Parquet files (detected by ``.parquet`` extension) carry their own index
@@ -24,14 +27,14 @@ def read_expression(source, data_type='r'):
     if isinstance(source, pd.DataFrame):
         return source.copy()
     path = str(source)
-    if path.endswith('.parquet'):
+    if path.endswith(".parquet"):
         return pd.read_parquet(path)
-    if data_type == 'p':
-        return pd.read_csv(path, sep='\t').set_index(['Peptide', 'Protein'])
-    return pd.read_csv(path, sep='\t', header=0, index_col=0)
+    if data_type == "p":
+        return pd.read_csv(path, sep="\t").set_index(["Peptide", "Protein"])
+    return pd.read_csv(path, sep="\t", header=0, index_col=0)
 
 
-def write_expression(df, path):
+def write_expression(df: pd.DataFrame, path: str | Path) -> None:
     """Write an expression DataFrame to disk.
 
     Writes Apache Parquet when *path* ends with ``.parquet``; tab-separated
@@ -43,13 +46,13 @@ def write_expression(df, path):
     path : str | Path
     """
     path = str(path)
-    if path.endswith('.parquet'):
+    if path.endswith(".parquet"):
         df.to_parquet(path)
     else:
-        df.to_csv(path, sep='\t')
+        df.to_csv(path, sep="\t")
 
 
-def sidecar_path(main_path, suffix):
+def sidecar_path(main_path: str | Path, suffix: str) -> str:
     """Derive a sidecar file path that inherits the extension of the main output.
 
     Parameters
