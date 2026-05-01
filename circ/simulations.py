@@ -92,7 +92,7 @@ class simulate:
         self.nrows = int(nrows)
         self.tpoint_space = int(tpoint_space)
 
-        # Column names: ZT{HH}_{rep}
+        # Column names: ZT{time}_{rep}  (time zero-padded to ≥2 digits)
         self.cols = [
             "ZT{:02d}_{}".format(tpoint_space * i + tpoint_space, j + 1)
             for i in range(self.tpoints)

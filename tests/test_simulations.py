@@ -1,4 +1,5 @@
 """Tests for the unified circ.simulations.simulate class."""
+
 import os
 import numpy as np
 import pandas as pd
@@ -10,6 +11,7 @@ from circ.simulations import simulate
 # ---------------------------------------------------------------------------
 # Construction and core attributes
 # ---------------------------------------------------------------------------
+
 
 class TestConstruction:
     def test_default_instantiation(self):
@@ -39,6 +41,12 @@ class TestConstruction:
         assert sim.cols[0] == "ZT04_1"
         assert sim.cols[2] == "ZT08_1"
 
+    def test_three_digit_column_names(self):
+        # tpoint_space=4, 25 tpoints → last time = 4*25 = 100 → ZT100
+        sim = simulate(tpoints=25, nrows=10, nreps=2, tpoint_space=4)
+        assert "ZT100_1" in sim.cols
+        assert "ZT100_2" in sim.cols
+
     def test_sim_row_scaled(self):
         sim = simulate(nrows=50, rseed=7)
         stds = np.std(sim.sim, axis=1)
@@ -63,6 +71,7 @@ class TestConstruction:
 # ---------------------------------------------------------------------------
 # Three-class labels
 # ---------------------------------------------------------------------------
+
 
 class TestClassLabels:
     def test_classes_array_length(self):
@@ -127,6 +136,7 @@ class TestClassLabels:
 # Batch effects
 # ---------------------------------------------------------------------------
 
+
 class TestBatchEffects:
     def test_no_batch_effects_by_default(self):
         sim = simulate(nrows=50, rseed=0)
@@ -153,6 +163,7 @@ class TestBatchEffects:
 # Missing data
 # ---------------------------------------------------------------------------
 
+
 class TestMissingData:
     def test_no_missing_by_default(self):
         sim = simulate(nrows=50, rseed=0)
@@ -172,14 +183,13 @@ class TestMissingData:
     def test_missing_reproducible(self):
         sim1 = simulate(nrows=30, p_miss=0.3, rseed=9)
         sim2 = simulate(nrows=30, p_miss=0.3, rseed=9)
-        np.testing.assert_array_equal(
-            np.isnan(sim1.sim_miss), np.isnan(sim2.sim_miss)
-        )
+        np.testing.assert_array_equal(np.isnan(sim1.sim_miss), np.isnan(sim2.sim_miss))
 
 
 # ---------------------------------------------------------------------------
 # write_output (expression format)
 # ---------------------------------------------------------------------------
+
 
 class TestWriteOutput:
     def test_creates_data_file(self, tmp_path):
@@ -228,6 +238,7 @@ class TestWriteOutput:
 # ---------------------------------------------------------------------------
 # write_proteomics
 # ---------------------------------------------------------------------------
+
 
 class TestWriteProteomics:
     def test_creates_all_three_files(self, tmp_path):

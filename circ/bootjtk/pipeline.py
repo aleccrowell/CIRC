@@ -351,7 +351,7 @@ def __create_parser__():
         type=str,
         default="DEFAULT",
         help="This is the filename of the data series you wish to analyze.\
-                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0 or ZT4). Longer or shorter prefixes will not work. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
+                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0, ZT4, or ZT100 for longer time series). The prefix must be exactly CT or ZT; the numeric part can be any non-negative integer. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
     )
     analysis.add_argument(
         "-F",
@@ -362,7 +362,7 @@ def __create_parser__():
         default="DEFAULT",
         type=str,
         help="This is the filename of the time point means of the data series you wish to analyze.\
-                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0 or ZT4). Longer or shorter prefixes will not work. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
+                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0, ZT4, or ZT100 for longer time series). The prefix must be exactly CT or ZT; the numeric part can be any non-negative integer. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
     )
 
     analysis.add_argument(
@@ -374,7 +374,7 @@ def __create_parser__():
         default="DEFAULT",
         type=str,
         help="This is the filename of the time point standard devations of the data series you wish to analyze.\
-                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0 or ZT4). Longer or shorter prefixes will not work. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
+                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0, ZT4, or ZT100 for longer time series). The prefix must be exactly CT or ZT; the numeric part can be any non-negative integer. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
     )
 
     analysis.add_argument(
@@ -386,7 +386,7 @@ def __create_parser__():
         default="DEFAULT",
         type=str,
         help="This is the filename of the time point replicate numbers of the data series you wish to analyze.                         \
-                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0 or ZT4). Longer or shorter prefixes will not work. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
+                   The data should be tab-spaced. The first row should contain a # sign followed by the time points with either CT or ZT preceding the time point (such as ZT0, ZT4, or ZT100 for longer time series). The prefix must be exactly CT or ZT; the numeric part can be any non-negative integer. The following rows should contain the gene/series ID followed by the values for every time point. Where values are not available NA should be put in it's place.",
     )
 
     analysis.add_argument(

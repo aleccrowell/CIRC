@@ -38,12 +38,20 @@ poetry install --extras fast
 
 ## Data format
 
-All tools expect expression data with samples as columns named `ZT{HH}_{rep}`
-(zero-padded two-digit Zeitgeber Time, underscore, replicate number):
+All tools expect expression data with samples as columns named `ZT{time}_{rep}`
+(Zeitgeber Time as any non-negative integer, underscore, replicate number).
+Short experiments typically use two-digit times; longer time series (> 99 h)
+use three or more digits — all are handled identically:
 
 ```
 #       ZT02_1  ZT02_2  ZT04_1  ZT04_2  ZT06_1  ZT06_2
 gene_a  1.23    1.19    0.95    1.01    0.88    0.92
+gene_b  ...
+```
+
+```
+#       ZT100_1  ZT100_2  ZT104_1  ZT104_2  ZT108_1  ZT108_2
+gene_a  1.23     1.19     0.95     1.01     0.88     0.92
 gene_b  ...
 ```
 

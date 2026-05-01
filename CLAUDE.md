@@ -38,6 +38,7 @@ Expression inputs and outputs support two formats, detected by file extension:
 Column convention for expression data:
 - First column: gene/peptide ID (header cell is `#` or `ID`)
 - Remaining columns: ZT- or CT-prefixed sample names, e.g. `ZT02_1`, `ZT04_2`
+- Time values can be any non-negative integer; 3+ digit times (`ZT100_1`, `ZT120_2`) are fully supported throughout the pipeline
 
 All module constructors (`ranker`, `sva`, `imputable`, `Classifier`) accept either a file path
 or a `pd.DataFrame` directly.  Use `circ.io.read_expression` / `write_expression` for

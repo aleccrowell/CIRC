@@ -772,7 +772,8 @@ def __create_parser__():
         default="DEFAULT",
         type=str,
         help="Tab-delimited input file. Header row must start with # or ID "
-        "followed by timepoints in ZTn or CTn format. "
+        "followed by timepoints in ZT{n} or CT{n} format, where {n} is any "
+        "non-negative integer (e.g. ZT0, ZT4, ZT100). "
         "Use NA for missing values.",
     )
 

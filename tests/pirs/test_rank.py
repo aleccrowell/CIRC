@@ -4,7 +4,6 @@ import pandas as pd
 import os
 
 from circ.pirs.rank import ranker, rsd_ranker
-from tests.pirs.conftest import make_ranker_tsv
 
 
 class TestRankerInit:
@@ -57,6 +56,19 @@ class TestGetTpoints:
         r.get_tpoints()
         for t in np.unique(r.tpoints):
             assert np.sum(r.tpoints == t) == 3
+
+    def test_three_digit_zt_columns(self):
+        df = pd.DataFrame(
+            {
+                "ZT100_1": [1.0, 2.0],
+                "ZT104_1": [1.5, 2.5],
+                "ZT108_1": [2.0, 3.0],
+            },
+            index=pd.Index(["gene_a", "gene_b"], name="#"),
+        )
+        r = ranker(df)
+        r.get_tpoints()
+        assert sorted(np.unique(r.tpoints).tolist()) == [100, 104, 108]
 
 
 class TestRemoveAnova:
@@ -249,8 +261,8 @@ class TestCalculateSlopePvals:
         tpoints = [2, 4, 6, 8, 10, 12]
         n_reps = 3
         cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
-        flat    = rng.normal(5.0, 0.05, len(cols))
-        sloped  = np.array(
+        flat = rng.normal(5.0, 0.05, len(cols))
+        sloped = np.array(
             [float(t * 3) + rng.normal(0, 0.1) for t in tpoints for _ in range(n_reps)]
         )
         df = pd.DataFrame({"flat": flat, "sloped": sloped}, index=cols).T
@@ -278,7 +290,9 @@ class TestCalculateSlopePvals:
         r = self._make_slope_ranker(tmp_path)
         result = r.calculate_slope_pvals(n_permutations=99)
         assert (result["slope_pval"] >= 0).all() and (result["slope_pval"] <= 1).all()
-        assert (result["slope_pval_bh"] >= 0).all() and (result["slope_pval_bh"] <= 1).all()
+        assert (result["slope_pval_bh"] >= 0).all() and (
+            result["slope_pval_bh"] <= 1
+        ).all()
 
     def test_sloped_lower_pval_than_flat(self, tmp_path):
         r = self._make_slope_ranker(tmp_path)
@@ -292,7 +306,7 @@ class TestCalculateSlopePvals:
         n_reps = 3
         cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
         noisy_flat = rng.normal(5.0, 2.0, len(cols))
-        sloped     = np.array(
+        sloped = np.array(
             [float(t * 3) + rng.normal(0, 0.1) for t in tpoints for _ in range(n_reps)]
         )
         df = pd.DataFrame({"noisy_flat": noisy_flat, "sloped": sloped}, index=cols).T
@@ -303,7 +317,9 @@ class TestCalculateSlopePvals:
         r.get_tpoints()
         r.calculate_scores()
         result = r.calculate_slope_pvals(n_permutations=199)
-        assert result.loc["sloped", "slope_pval"] < result.loc["noisy_flat", "slope_pval"]
+        assert (
+            result.loc["sloped", "slope_pval"] < result.loc["noisy_flat", "slope_pval"]
+        )
 
     def test_pirs_sort_with_slope_pvals_writes_columns(self, tmp_path):
         rng = np.random.default_rng(3)
