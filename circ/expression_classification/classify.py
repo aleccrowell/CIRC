@@ -347,8 +347,13 @@ class Classifier:
             for col in self.echo_results.columns:
                 result[col] = self.echo_results[col]
             # Clear amplitude class for genes below the ECHO significance threshold
-            if "echo_p_bh" in result.columns and "echo_amplitude_class" in result.columns:
-                non_sig = result["echo_p_bh"].isna() | (result["echo_p_bh"] > echo_p_threshold)
+            if (
+                "echo_p_bh" in result.columns
+                and "echo_amplitude_class" in result.columns
+            ):
+                non_sig = result["echo_p_bh"].isna() | (
+                    result["echo_p_bh"] > echo_p_threshold
+                )
                 result.loc[non_sig, "echo_amplitude_class"] = None
 
         self.classifications = result

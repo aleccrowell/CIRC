@@ -11,6 +11,7 @@ from circ.bootjtk.echo_fit import EchoFitter, _ECHO_OUTPUT_COLS, _parse_timepoin
 # Helpers — synthetic oscillation data
 # ---------------------------------------------------------------------------
 
+
 def _make_oscillation_df(
     gamma_norm: float,
     n_genes: int = 5,
@@ -43,7 +44,7 @@ def _make_oscillation_df(
     t_obs = np.arange(n_timepoints, dtype=float) * tpoint_space  # hours: 0, 2, ..., 22
     t_span = float(t_obs[-1] - t_obs[0])
     # Convert to per-hour² so that the fitter (which normalises t) recovers gamma_norm
-    gamma_orig = gamma_norm / (t_span ** 2) if t_span > 0 else gamma_norm
+    gamma_orig = gamma_norm / (t_span**2) if t_span > 0 else gamma_norm
 
     omega_hours = 2.0 * np.pi / 24.0  # 24-hour period
     phi = 0.0
@@ -53,7 +54,10 @@ def _make_oscillation_df(
         gene_id = f"gene_{gene_i}"
         row = {}
         for t in t_obs:
-            clean = A * np.exp(-gamma_orig * t**2) * np.cos(omega_hours * t + phi) + baseline
+            clean = (
+                A * np.exp(-gamma_orig * t**2) * np.cos(omega_hours * t + phi)
+                + baseline
+            )
             for rep in range(1, n_reps + 1):
                 col = f"{zt_prefix}{int(t):02d}_{rep}"
                 row[col] = clean + rng.normal(0, noise)
@@ -67,6 +71,7 @@ def _make_oscillation_df(
 # ---------------------------------------------------------------------------
 # Tests: _parse_timepoints helper
 # ---------------------------------------------------------------------------
+
 
 class TestParseTimepoints:
     def test_zt_columns(self):
@@ -88,6 +93,7 @@ class TestParseTimepoints:
 # ---------------------------------------------------------------------------
 # Tests: EchoFitter instantiation
 # ---------------------------------------------------------------------------
+
 
 class TestEchoFitterInit:
     def test_accepts_dataframe(self):
@@ -131,6 +137,7 @@ class TestEchoFitterInit:
 # Tests: fit() output structure
 # ---------------------------------------------------------------------------
 
+
 class TestEchoFitterFitOutput:
     @pytest.fixture(scope="class")
     def fit_result(self):
@@ -172,6 +179,7 @@ class TestEchoFitterFitOutput:
 # Tests: amplitude class recovery on synthetic data
 # ---------------------------------------------------------------------------
 
+
 class TestAmplitudeClassRecovery:
     def test_harmonic_gamma_near_zero(self):
         df = _make_oscillation_df(gamma_norm=0.0, noise=0.01, n_genes=10, seed=1)
@@ -208,6 +216,7 @@ class TestAmplitudeClassRecovery:
 # Tests: multiprocessing
 # ---------------------------------------------------------------------------
 
+
 class TestMultiprocessing:
     def test_workers_gt1_same_results(self):
         df = _make_oscillation_df(gamma_norm=0.0, n_genes=6, noise=0.01, seed=42)
@@ -226,6 +235,7 @@ class TestMultiprocessing:
 # ---------------------------------------------------------------------------
 # Tests: column name edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestColumnNameEdgeCases:
     def test_three_digit_zt_timepoints(self):

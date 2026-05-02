@@ -158,8 +158,16 @@ def _fit_gene(args: tuple) -> tuple:
         tau_stat, p_val = kendalltau(y_fit, y_fitted)
 
         # Convert normalised-time omega and phi back to original time units
-        period_fit = float(2.0 * np.pi / omega_fit * t_span) if t_span > 0 else float(2.0 * np.pi / omega_fit)
-        phase_hours = float((-phi_fit / omega_fit * t_span) % period_fit) if t_span > 0 else float((-phi_fit / omega_fit) % period_fit)
+        period_fit = (
+            float(2.0 * np.pi / omega_fit * t_span)
+            if t_span > 0
+            else float(2.0 * np.pi / omega_fit)
+        )
+        phase_hours = (
+            float((-phi_fit / omega_fit * t_span) % period_fit)
+            if t_span > 0
+            else float((-phi_fit / omega_fit) % period_fit)
+        )
     except Exception:
         return _nan
 
@@ -291,8 +299,8 @@ class EchoFitter:
         result["echo_amplitude_class"] = None
         conv_mask = result["echo_converged"] & result["echo_gamma"].notna()
         if conv_mask.any():
-            result.loc[conv_mask, "echo_amplitude_class"] = (
-                result.loc[conv_mask, "echo_gamma"].apply(_classify_gamma)
-            )
+            result.loc[conv_mask, "echo_amplitude_class"] = result.loc[
+                conv_mask, "echo_gamma"
+            ].apply(_classify_gamma)
 
         return result[_ECHO_OUTPUT_COLS]
