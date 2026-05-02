@@ -1,10 +1,10 @@
-"""Tests for circ.bootjtk.echo_fit.EchoFitter."""
+"""Tests for circ.rhythmicity.echo_fit.EchoFitter."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from circ.bootjtk.echo_fit import EchoFitter, _ECHO_OUTPUT_COLS, _parse_timepoints
+from circ.rhythmicity.echo_fit import EchoFitter, _ECHO_OUTPUT_COLS, _parse_timepoints
 
 
 # ---------------------------------------------------------------------------

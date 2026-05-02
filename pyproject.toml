@@ -32,7 +32,7 @@ circ = "circ.cli:main"
 
 [tool.poetry]
 packages = [{include = "circ"}]
-include = ["circ/bootjtk/ref_files/**/*"]
+include = ["circ/rhythmicity/ref_files/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -40,7 +40,7 @@ addopts = "--cov=circ --cov-report=term-missing --cov-report=xml"
 
 [tool.coverage.run]
 source = ["circ"]
-omit = ["circ/bootjtk/mpfit.py"]
+omit = ["circ/rhythmicity/mpfit.py"]
 
 [tool.ruff.lint]
 select = ["E", "F"]

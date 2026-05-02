@@ -1,4 +1,5 @@
 """Tests for circ.io — shared expression I/O utilities."""
+
 import pandas as pd
 import pytest
 
@@ -8,6 +9,7 @@ from circ.io import read_expression, sidecar_path, write_expression
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def expr_df():
@@ -23,14 +25,16 @@ def expr_df():
 @pytest.fixture
 def prot_df():
     """Minimal proteomics-style expression DataFrame with MultiIndex."""
-    idx = pd.MultiIndex.from_tuples([("pep_a", "prot_1"), ("pep_b", "prot_1")],
-                                    names=["Peptide", "Protein"])
+    idx = pd.MultiIndex.from_tuples(
+        [("pep_a", "prot_1"), ("pep_b", "prot_1")], names=["Peptide", "Protein"]
+    )
     return pd.DataFrame({"ZT02_1": [1.0, 2.0], "ZT04_1": [1.5, 2.5]}, index=idx)
 
 
 # ---------------------------------------------------------------------------
 # read_expression
 # ---------------------------------------------------------------------------
+
 
 class TestReadExpression:
     def test_passthrough_dataframe(self, expr_df):
@@ -72,6 +76,7 @@ class TestReadExpression:
 # write_expression
 # ---------------------------------------------------------------------------
 
+
 class TestWriteExpression:
     def test_write_tsv(self, tmp_path, expr_df):
         path = str(tmp_path / "out.txt")
@@ -102,9 +107,12 @@ class TestWriteExpression:
 # sidecar_path
 # ---------------------------------------------------------------------------
 
+
 class TestSidecarPath:
     def test_preserves_parquet_extension(self):
-        assert sidecar_path("/data/out.parquet", "_trends") == "/data/out_trends.parquet"
+        assert (
+            sidecar_path("/data/out.parquet", "_trends") == "/data/out_trends.parquet"
+        )
 
     def test_preserves_txt_extension(self):
         assert sidecar_path("/data/out.txt", "_perms") == "/data/out_perms.txt"

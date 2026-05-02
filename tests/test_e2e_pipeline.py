@@ -7,9 +7,11 @@ a module-scoped fixture; individual test classes check each stage.
 Assertions are structural (column presence, shape, label validity) and
 directional (known-class averages) rather than exact numeric values.
 """
+
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,6 +30,7 @@ import circ.visualization as viz
 # Module-scoped fixture: run the full pipeline once
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def pipeline(tmp_path_factory):
     """Run the complete pipeline and return all intermediate artifacts."""
@@ -38,10 +41,17 @@ def pipeline(tmp_path_factory):
     # circ_cor() minimum of 24 // tpoint_spacing unique timepoints (one full
     # 24h period).  Fewer unique timepoints alias to zero correlation.
     sim = simulate(
-        tpoints=12, nrows=100, nreps=2, tpoint_space=2,
-        pcirc=0.3, plin=0.2,
-        n_batch_effects=1, pbatch=0.5, effect_size=2.0,
-        p_miss=0.2, lam_miss=3,
+        tpoints=12,
+        nrows=100,
+        nreps=2,
+        tpoint_space=2,
+        pcirc=0.3,
+        plin=0.2,
+        n_batch_effects=1,
+        pbatch=0.5,
+        effect_size=2.0,
+        p_miss=0.2,
+        lam_miss=3,
         rseed=42,
     )
     pool_map_stem = str(tmp / "pool_map")
@@ -96,12 +106,15 @@ def close_figures():
 # Step 1: Simulation
 # ---------------------------------------------------------------------------
 
+
 class TestSimulation:
     def test_classes_array_length(self, pipeline):
         assert len(pipeline["sim"].classes) == 100
 
     def test_class_labels_valid(self, pipeline):
-        assert set(pipeline["sim"].classes).issubset({"circadian", "linear", "constitutive"})
+        assert set(pipeline["sim"].classes).issubset(
+            {"circadian", "linear", "constitutive"}
+        )
 
     def test_all_three_classes_present(self, pipeline):
         assert set(pipeline["sim"].classes) == {"circadian", "linear", "constitutive"}
@@ -119,7 +132,9 @@ class TestSimulation:
         assert os.path.exists(pipeline["pool_map_stem"] + ".parquet")
 
     def test_true_classes_columns(self, pipeline):
-        assert {"Circadian", "Linear", "Const"}.issubset(pipeline["true_classes"].columns)
+        assert {"Circadian", "Linear", "Const"}.issubset(
+            pipeline["true_classes"].columns
+        )
 
     def test_true_classes_binary(self, pipeline):
         for col in ("Circadian", "Linear", "Const"):
@@ -136,6 +151,7 @@ class TestSimulation:
 # ---------------------------------------------------------------------------
 # Step 2: Imputation
 # ---------------------------------------------------------------------------
+
 
 class TestImputation:
     def test_output_file_exists(self, pipeline):
@@ -159,6 +175,7 @@ class TestImputation:
 # ---------------------------------------------------------------------------
 # Step 3: Normalization (SVA)
 # ---------------------------------------------------------------------------
+
 
 class TestNormalization:
     def test_output_file_exists(self, pipeline):
@@ -184,6 +201,7 @@ class TestNormalization:
 # Step 4: Classification
 # ---------------------------------------------------------------------------
 
+
 class TestClassification:
     def test_result_is_dataframe(self, pipeline):
         assert isinstance(pipeline["result"], pd.DataFrame)
@@ -203,7 +221,14 @@ class TestClassification:
         assert pipeline["result"]["label"].notna().all()
 
     def test_valid_label_set(self, pipeline):
-        valid = {"constitutive", "rhythmic", "linear", "variable", "noisy_rhythmic", "unclassified"}
+        valid = {
+            "constitutive",
+            "rhythmic",
+            "linear",
+            "variable",
+            "noisy_rhythmic",
+            "unclassified",
+        }
         assert set(pipeline["result"]["label"].unique()).issubset(valid)
 
     def test_pirs_scores_non_negative(self, pipeline):
@@ -231,8 +256,10 @@ class TestClassification:
         variable_ids = result[result["label"] == "variable"].index
         if len(const_ids) < 3 or len(variable_ids) < 3:
             pytest.skip("insufficient label representation for comparison")
-        assert (result.loc[const_ids, "pirs_score"].mean() <
-                result.loc[variable_ids, "pirs_score"].mean())
+        assert (
+            result.loc[const_ids, "pirs_score"].mean()
+            < result.loc[variable_ids, "pirs_score"].mean()
+        )
 
     def test_linear_genes_have_lower_slope_pval_on_average(self, pipeline):
         """Genes simulated as linear should have lower slope_pval on average."""
@@ -246,8 +273,10 @@ class TestClassification:
         const_ids = tc[tc["Const"] == 1].index
         if len(linear_ids) < 3 or len(const_ids) < 3:
             pytest.skip("insufficient class representation")
-        assert (result.loc[linear_ids, "slope_pval"].mean() <
-                result.loc[const_ids, "slope_pval"].mean())
+        assert (
+            result.loc[linear_ids, "slope_pval"].mean()
+            < result.loc[const_ids, "slope_pval"].mean()
+        )
 
     def test_circadian_genes_have_higher_tau_mean(self, pipeline):
         """Simulated circadian genes should rank higher on tau_mean than constitutive genes."""
@@ -292,6 +321,7 @@ class TestClassification:
 # Step 5: Visualization — classification plots
 # ---------------------------------------------------------------------------
 
+
 class TestClassificationPlots:
     def test_label_distribution(self, pipeline):
         assert isinstance(viz.label_distribution(pipeline["result"]), plt.Axes)
@@ -333,7 +363,7 @@ class TestClassificationPlots:
         fig = plt.figure(figsize=(15, 4))
         ax0 = fig.add_subplot(1, 3, 1)
         ax1 = fig.add_subplot(1, 3, 2)
-        ax2 = fig.add_subplot(1, 3, 3, projection='polar')
+        ax2 = fig.add_subplot(1, 3, 3, projection="polar")
         viz.label_distribution(pipeline["result"], ax=ax0)
         viz.pirs_vs_tau(pipeline["result"], ax=ax1)
         viz.phase_wheel(pipeline["result"], ax=ax2)
@@ -343,6 +373,7 @@ class TestClassificationPlots:
 # ---------------------------------------------------------------------------
 # Step 6: Visualization — benchmark plots against ground truth
 # ---------------------------------------------------------------------------
+
 
 class TestBenchmarkPlots:
     def test_classification_pr_returns_axes(self, pipeline):
@@ -374,11 +405,14 @@ class TestBenchmarkPlots:
     def test_benchmark_figure_saves(self, pipeline):
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         viz.classification_pr(
-            pipeline["result"], pipeline["true_classes"],
-            ground_truth_col="Const", ax=axes[0],
+            pipeline["result"],
+            pipeline["true_classes"],
+            ground_truth_col="Const",
+            ax=axes[0],
         )
         viz.classification_roc(
-            pipeline["result"], pipeline["true_classes"],
+            pipeline["result"],
+            pipeline["true_classes"],
             ax=axes[1],
         )
         outpath = str(pipeline["tmp"] / "benchmark.png")

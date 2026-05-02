@@ -11,7 +11,7 @@ import pandas as pd
 
 _REF_DIR = os.path.normpath(
     os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "bootjtk", "ref_files"
+        os.path.dirname(os.path.abspath(__file__)), "..", "rhythmicity", "ref_files"
     )
 )
 
@@ -157,7 +157,7 @@ class Classifier:
             gene ID; columns include ``TauMean``, ``PeriodMean``, ``PhaseMean``,
             ``GammaBH``, etc.
         """
-        from circ.bootjtk.pipeline import main as _pipeline_main
+        from circ.rhythmicity.pipeline import main as _pipeline_main
 
         workdir = tempfile.mkdtemp(prefix="circ_classify_")
         try:
@@ -219,7 +219,7 @@ class Classifier:
             ``echo_gamma``, ``echo_amplitude_class``, ``echo_tau``,
             ``echo_p_bh``, ``echo_period``, ``echo_phase``.
         """
-        from circ.bootjtk.echo_fit import EchoFitter
+        from circ.rhythmicity.echo_fit import EchoFitter
 
         fitter = EchoFitter(self._source, reps=self.reps)
         self.echo_results = fitter.fit(workers=workers)

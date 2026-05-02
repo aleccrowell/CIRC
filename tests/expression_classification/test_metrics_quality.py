@@ -9,6 +9,7 @@ points directly at the underlying algorithm rather than at imputation/SVA.
 Assertions use AUC > 0.5 (ranking) and AP > baseline (precision-recall) so
 that they remain valid regardless of classification threshold choices.
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,6 +24,7 @@ from circ.pirs.rank import ranker, rsd_ranker
 # Module-scoped fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def clean_pipeline(tmp_path_factory):
     """Run Classifier on clean (no batch/missing) simulated data.
@@ -35,10 +37,16 @@ def clean_pipeline(tmp_path_factory):
     out = str(tmp / "clean.txt")
 
     sim = simulate(
-        tpoints=12, nrows=150, nreps=2, tpoint_space=2,
-        pcirc=0.35, plin=0.25,
-        phase_noise=0.1, amp_noise=0.4,
-        n_batch_effects=0, p_miss=0.0,
+        tpoints=12,
+        nrows=150,
+        nreps=2,
+        tpoint_space=2,
+        pcirc=0.35,
+        plin=0.25,
+        phase_noise=0.1,
+        amp_noise=0.4,
+        n_batch_effects=0,
+        p_miss=0.0,
         rseed=11,
     )
     sim.write_output(out_name=out)
@@ -56,6 +64,7 @@ def clean_pipeline(tmp_path_factory):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _auc(result, true_classes, score_col, truth_col, invert=False):
     """ROC AUC for score_col vs binary truth_col; None if data is insufficient."""
@@ -100,6 +109,7 @@ def _class_means(result, true_classes, score_col, truth_col):
 # ROC AUC: each metric should rank its target class above others
 # ---------------------------------------------------------------------------
 
+
 class TestMetricAUC:
     """Each score must achieve AUC > 0.5 against its target class on clean data.
 
@@ -126,32 +136,51 @@ class TestMetricAUC:
         # Restrict to the two classes PIRS is designed to separate
         lin_const_mask = (tc.loc[shared, "Linear"] + tc.loc[shared, "Const"]) == 1
         subset = tc.loc[shared][lin_const_mask]
-        merged = result.loc[subset.index, ["pirs_score"]].join(subset[["Linear"]]).dropna()
+        merged = (
+            result.loc[subset.index, ["pirs_score"]].join(subset[["Linear"]]).dropna()
+        )
         if len(merged) < 10 or merged["Linear"].nunique() < 2:
             pytest.skip("insufficient data for AUC test")
         auc = roc_auc_score(merged["Linear"].values, merged["pirs_score"].values)
-        assert auc > 0.5, f"PIRS score → Linear (vs Const) AUC={auc:.3f}; expected > 0.5"
+        assert auc > 0.5, (
+            f"PIRS score → Linear (vs Const) AUC={auc:.3f}; expected > 0.5"
+        )
 
     def test_tau_mean_discriminates_circadian(self, clean_pipeline):
         """High TauMean (strong 24h autocorrelation) should rank circadian genes first."""
-        auc = _auc(clean_pipeline["result"], clean_pipeline["true_classes"],
-                   "tau_mean", "Circadian", invert=False)
+        auc = _auc(
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "tau_mean",
+            "Circadian",
+            invert=False,
+        )
         if auc is None:
             pytest.skip("insufficient data for AUC test")
         assert auc > 0.5, f"tau_mean → Circadian AUC={auc:.3f}; expected > 0.5"
 
     def test_emp_p_discriminates_circadian(self, clean_pipeline):
         """Low GammaBH p-value should rank circadian genes first."""
-        auc = _auc(clean_pipeline["result"], clean_pipeline["true_classes"],
-                   "emp_p", "Circadian", invert=True)
+        auc = _auc(
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "emp_p",
+            "Circadian",
+            invert=True,
+        )
         if auc is None:
             pytest.skip("insufficient data for AUC test")
         assert auc > 0.5, f"emp_p → Circadian AUC={auc:.3f}; expected > 0.5"
 
     def test_slope_pval_discriminates_linear(self, clean_pipeline):
         """Low slope p-value should rank linear (ramp) genes first."""
-        auc = _auc(clean_pipeline["result"], clean_pipeline["true_classes"],
-                   "slope_pval", "Linear", invert=True)
+        auc = _auc(
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "slope_pval",
+            "Linear",
+            invert=True,
+        )
         if auc is None:
             pytest.skip("insufficient data for AUC test")
         assert auc > 0.5, f"slope_pval → Linear AUC={auc:.3f}; expected > 0.5"
@@ -160,6 +189,7 @@ class TestMetricAUC:
 # ---------------------------------------------------------------------------
 # Average Precision: PR AUC should exceed random baseline
 # ---------------------------------------------------------------------------
+
 
 class TestMetricAP:
     """Average precision must exceed the positive-class prevalence baseline.
@@ -174,33 +204,54 @@ class TestMetricAP:
         shared = result.index.intersection(tc.index)
         lin_const_mask = (tc.loc[shared, "Linear"] + tc.loc[shared, "Const"]) == 1
         subset = tc.loc[shared][lin_const_mask]
-        merged = result.loc[subset.index, ["pirs_score"]].join(subset[["Linear"]]).dropna()
+        merged = (
+            result.loc[subset.index, ["pirs_score"]].join(subset[["Linear"]]).dropna()
+        )
         if len(merged) < 10 or merged["Linear"].nunique() < 2:
             pytest.skip("insufficient data")
-        ap = average_precision_score(merged["Linear"].values, merged["pirs_score"].values)
+        ap = average_precision_score(
+            merged["Linear"].values, merged["pirs_score"].values
+        )
         baseline = subset["Linear"].mean()
-        assert ap > baseline, f"PIRS AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        assert ap > baseline, (
+            f"PIRS AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        )
 
     def test_slope_pval_ap_above_baseline(self, clean_pipeline):
-        ap = _ap(clean_pipeline["result"], clean_pipeline["true_classes"],
-                 "slope_pval", "Linear", invert=True)
+        ap = _ap(
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "slope_pval",
+            "Linear",
+            invert=True,
+        )
         if ap is None:
             pytest.skip("insufficient data")
         baseline = clean_pipeline["true_classes"]["Linear"].mean()
-        assert ap > baseline, f"slope_pval AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        assert ap > baseline, (
+            f"slope_pval AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        )
 
     def test_tau_mean_ap_above_baseline(self, clean_pipeline):
-        ap = _ap(clean_pipeline["result"], clean_pipeline["true_classes"],
-                 "tau_mean", "Circadian", invert=False)
+        ap = _ap(
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "tau_mean",
+            "Circadian",
+            invert=False,
+        )
         if ap is None:
             pytest.skip("insufficient data")
         baseline = clean_pipeline["true_classes"]["Circadian"].mean()
-        assert ap > baseline, f"tau_mean AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        assert ap > baseline, (
+            f"tau_mean AP={ap:.3f} should exceed prevalence baseline ({baseline:.3f})"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Directional ranking: class means must be in the correct direction
 # ---------------------------------------------------------------------------
+
 
 class TestDirectionalRanking:
     """Mean score values must be directionally consistent with true class membership.
@@ -211,8 +262,10 @@ class TestDirectionalRanking:
 
     def test_circadian_has_higher_tau_mean_than_constitutive(self, clean_pipeline):
         pos_mean, neg_mean = _class_means(
-            clean_pipeline["result"], clean_pipeline["true_classes"],
-            "tau_mean", "Circadian",
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "tau_mean",
+            "Circadian",
         )
         assert pos_mean > neg_mean, (
             f"Circadian tau_mean ({pos_mean:.3f}) should exceed "
@@ -227,12 +280,16 @@ class TestDirectionalRanking:
         time extremes; flat noise does not.
         """
         lin_pirs, _ = _class_means(
-            clean_pipeline["result"], clean_pipeline["true_classes"],
-            "pirs_score", "Linear",
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "pirs_score",
+            "Linear",
         )
         const_pirs, _ = _class_means(
-            clean_pipeline["result"], clean_pipeline["true_classes"],
-            "pirs_score", "Const",
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "pirs_score",
+            "Const",
         )
         assert lin_pirs > const_pirs, (
             f"Linear pirs_score ({lin_pirs:.3f}) should exceed "
@@ -241,8 +298,10 @@ class TestDirectionalRanking:
 
     def test_linear_has_lower_slope_pval_than_constitutive(self, clean_pipeline):
         lin_pval, const_pval = _class_means(
-            clean_pipeline["result"], clean_pipeline["true_classes"],
-            "slope_pval", "Linear",
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "slope_pval",
+            "Linear",
         )
         assert lin_pval < const_pval, (
             f"Linear slope_pval ({lin_pval:.3f}) should be "
@@ -251,8 +310,10 @@ class TestDirectionalRanking:
 
     def test_circadian_has_lower_emp_p_than_constitutive(self, clean_pipeline):
         circ_empp, const_empp = _class_means(
-            clean_pipeline["result"], clean_pipeline["true_classes"],
-            "emp_p", "Circadian",
+            clean_pipeline["result"],
+            clean_pipeline["true_classes"],
+            "emp_p",
+            "Circadian",
         )
         assert circ_empp < const_empp, (
             f"Circadian emp_p ({circ_empp:.3f}) should be "
@@ -263,6 +324,7 @@ class TestDirectionalRanking:
 # ---------------------------------------------------------------------------
 # Label accuracy: precision of assigned labels vs ground truth
 # ---------------------------------------------------------------------------
+
 
 class TestLabelAccuracy:
     """Predicted labels should agree with ground truth better than random chance.
@@ -297,7 +359,9 @@ class TestLabelAccuracy:
         rhythmic_labels = {"rhythmic", "noisy_rhythmic"}
         n_detected = result.loc[shared, "label"].isin(rhythmic_labels).sum()
         if n_detected < 3:
-            pytest.skip("too few rhythmic/noisy_rhythmic labels for meaningful precision test")
+            pytest.skip(
+                "too few rhythmic/noisy_rhythmic labels for meaningful precision test"
+            )
         pred_pos = result.loc[shared, "label"].isin(rhythmic_labels)
         act_pos = tc.loc[shared, "Circadian"] == 1
         tp = (pred_pos & act_pos).sum()
@@ -371,6 +435,7 @@ class TestLabelAccuracy:
 # Longer timeseries: 2-cycle (48h) data must work end-to-end
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def long_pipeline(tmp_path_factory):
     """Run Classifier on 2-cycle (48h) data.
@@ -385,10 +450,16 @@ def long_pipeline(tmp_path_factory):
     out = str(tmp / "long_clean.txt")
 
     sim = simulate(
-        tpoints=24, nrows=150, nreps=2, tpoint_space=2,
-        pcirc=0.35, plin=0.25,
-        phase_noise=0.1, amp_noise=0.4,
-        n_batch_effects=0, p_miss=0.0,
+        tpoints=24,
+        nrows=150,
+        nreps=2,
+        tpoint_space=2,
+        pcirc=0.35,
+        plin=0.25,
+        phase_noise=0.1,
+        amp_noise=0.4,
+        n_batch_effects=0,
+        p_miss=0.0,
         rseed=13,
     )
     sim.write_output(out_name=out)
@@ -418,11 +489,18 @@ class TestLongerTimeseries:
 
     def test_circadian_detected_on_2cycle_data(self, long_pipeline):
         """BooteJTK detects 24h rhythms on 48h data."""
-        auc = _auc(long_pipeline["result"], long_pipeline["true_classes"],
-                   "tau_mean", "Circadian", invert=False)
+        auc = _auc(
+            long_pipeline["result"],
+            long_pipeline["true_classes"],
+            "tau_mean",
+            "Circadian",
+            invert=False,
+        )
         if auc is None:
             pytest.skip("insufficient data for AUC test")
-        assert auc > 0.5, f"tau_mean → Circadian AUC={auc:.3f} on 2-cycle data; expected > 0.5"
+        assert auc > 0.5, (
+            f"tau_mean → Circadian AUC={auc:.3f} on 2-cycle data; expected > 0.5"
+        )
 
     def test_linear_label_precision_above_chance_2cycle(self, long_pipeline):
         """'linear' label fires and is precise on 2-cycle data.
@@ -455,6 +533,7 @@ class TestLongerTimeseries:
 # PIRS noise discrimination: flat high-noise vs flat low-noise constitutive
 # ---------------------------------------------------------------------------
 
+
 class TestPirsNoiseDiscrimination:
     """PIRS score discriminates flat high-noise from flat low-noise constitutive genes.
 
@@ -472,7 +551,7 @@ class TestPirsNoiseDiscrimination:
         tpoints = [2, 4, 6, 8, 10, 12]
         n_reps = 3
         cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
-        flat_low  = rng.normal(5.0, 0.1, len(cols))
+        flat_low = rng.normal(5.0, 0.1, len(cols))
         flat_high = rng.normal(5.0, 2.0, len(cols))
         df = pd.DataFrame({"flat_low": flat_low, "flat_high": flat_high}, index=cols).T
         df.index.name = "#"
@@ -496,13 +575,13 @@ class TestPirsNoiseDiscrimination:
     def test_neither_gene_flagged_as_nonconstit(self, flat_noise_ranker):
         """Both flat genes should have high PIRS p-values regardless of noise level."""
         result = flat_noise_ranker.calculate_pvals(n_permutations=199)
-        assert result.loc["flat_low",  "pval"] > 0.1
+        assert result.loc["flat_low", "pval"] > 0.1
         assert result.loc["flat_high", "pval"] > 0.1
 
     def test_neither_gene_has_significant_slope(self, flat_noise_ranker):
         """Neither flat gene should be detected as significantly trending."""
         result = flat_noise_ranker.calculate_slope_pvals(n_permutations=199)
-        assert result.loc["flat_low",  "slope_pval"] > 0.1
+        assert result.loc["flat_low", "slope_pval"] > 0.1
         assert result.loc["flat_high", "slope_pval"] > 0.1
 
     def test_rsd_also_distinguishes_noise_levels(self, tmp_path_factory):
@@ -512,7 +591,7 @@ class TestPirsNoiseDiscrimination:
         tpoints = [2, 4, 6, 8, 10, 12]
         n_reps = 3
         cols = [f"CT{t:02d}_{r}" for t in tpoints for r in range(1, n_reps + 1)]
-        flat_low  = rng.normal(5.0, 0.1, len(cols))
+        flat_low = rng.normal(5.0, 0.1, len(cols))
         flat_high = rng.normal(5.0, 2.0, len(cols))
         df = pd.DataFrame({"flat_low": flat_low, "flat_high": flat_high}, index=cols).T
         df.index.name = "#"

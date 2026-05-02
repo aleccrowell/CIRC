@@ -14,7 +14,9 @@ def make_ranker_tsv(tmp_path, n_timepoints=4, n_reps=3, n_genes=8, prefix="ZT"):
         rows[f"gene_{i}"] = np.random.normal(1.0, 0.05, len(cols))
 
     # One clearly rhythmic gene — values ramp hard across timepoints so ANOVA removes it
-    rhythmic = [float(t_idx * 20) for t_idx in range(n_timepoints) for _ in range(n_reps)]
+    rhythmic = [
+        float(t_idx * 20) for t_idx in range(n_timepoints) for _ in range(n_reps)
+    ]
     rows["rhythmic_gene"] = rhythmic
 
     df = pd.DataFrame(rows, index=cols).T

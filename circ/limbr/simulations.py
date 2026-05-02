@@ -37,10 +37,10 @@ class analyze:
         workers : int
             Parallel worker processes for BooteJTK (default 1).
         """
-        from circ.bootjtk import BooteJTK, CalcP
-        import circ.bootjtk as _bootjtk_pkg
+        from circ.rhythmicity import BooteJTK, CalcP
+        import circ.rhythmicity as _rhythmicity_pkg
 
-        ref_dir = os.path.join(os.path.dirname(_bootjtk_pkg.__file__), "ref_files")
+        ref_dir = os.path.join(os.path.dirname(_rhythmicity_pkg.__file__), "ref_files")
 
         df = pd.read_csv(filename, sep="\t", index_col=0)
 

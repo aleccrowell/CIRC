@@ -163,6 +163,7 @@ class TestAnalyze:
         sim.write_output(out_name=data_out)
 
         from circ.pirs.rank import ranker
+
         r = ranker(data_out, anova=False)
         r.get_tpoints()
         scores = r.calculate_scores()

@@ -1,8 +1,9 @@
 """Tests for model functions and fitting routines in bootjtk/arbfit.py."""
+
 import numpy as np
 import pytest
 
-import circ.bootjtk.arbfit as arbfit
+import circ.rhythmicity.arbfit as arbfit
 
 
 class TestLinear:
@@ -59,7 +60,7 @@ class TestExponential:
         x = np.array([0.0, 1.0, 2.0, 3.0])
         p = [1.0, 1.0, 0.0]
         result = arbfit.exp(x, p)
-        assert all(result[i] > result[i+1] for i in range(len(result)-1))
+        assert all(result[i] > result[i + 1] for i in range(len(result) - 1))
 
 
 class TestPowerLaw:
@@ -115,13 +116,17 @@ class TestArbFit:
     def test_xfit_yfit_same_length(self):
         x = np.linspace(0, 10, 15)
         y = 1.5 * x + 2.0
-        _, _, xfit, yfit = arbfit.arbFit(fct=arbfit.line, x=x, y=y, p0=np.array([1.0, 0.0]))
+        _, _, xfit, yfit = arbfit.arbFit(
+            fct=arbfit.line, x=x, y=y, p0=np.array([1.0, 0.0])
+        )
         assert len(xfit) == len(yfit)
 
     def test_xfit_spans_data_range(self):
         x = np.linspace(1.0, 9.0, 20)
         y = x * 0.5
-        _, _, xfit, _ = arbfit.arbFit(fct=arbfit.line, x=x, y=y, p0=np.array([0.5, 0.0]))
+        _, _, xfit, _ = arbfit.arbFit(
+            fct=arbfit.line, x=x, y=y, p0=np.array([0.5, 0.0])
+        )
         assert xfit[0] == pytest.approx(x.min(), rel=1e-3)
         assert xfit[-1] == pytest.approx(x.max(), rel=1e-3)
 

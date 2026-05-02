@@ -5,6 +5,7 @@ slope permutation p-values — on a synthetic dataset with a known mix of
 constitutive and linearly trending genes.  Assertions are at the distributional
 level (group means, column presence) rather than exact values.
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -24,7 +25,11 @@ def e2e_file(tmp_path_factory):
         data[f"const_{i}"] = rng.normal(5.0 + i * 0.3, 0.1, len(cols))
     for i in range(5):
         data[f"linear_{i}"] = np.array(
-            [float(t * (2 + i * 0.4)) + rng.normal(0, 0.2) for t in tpoints for _ in range(n_reps)]
+            [
+                float(t * (2 + i * 0.4)) + rng.normal(0, 0.2)
+                for t in tpoints
+                for _ in range(n_reps)
+            ]
         )
     df = pd.DataFrame(data, index=cols).T
     df.index.name = "#"
@@ -91,8 +96,12 @@ class TestPirsE2ESlopePvals:
 
     def test_linear_genes_have_lower_slope_pval_on_average(self, e2e_ranker):
         errors = e2e_ranker.errors
-        const_pvals = errors.loc[[g for g in errors.index if "const" in g], "slope_pval"]
-        linear_pvals = errors.loc[[g for g in errors.index if "linear" in g], "slope_pval"]
+        const_pvals = errors.loc[
+            [g for g in errors.index if "const" in g], "slope_pval"
+        ]
+        linear_pvals = errors.loc[
+            [g for g in errors.index if "linear" in g], "slope_pval"
+        ]
         assert linear_pvals.mean() < const_pvals.mean()
 
 
