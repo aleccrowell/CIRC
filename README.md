@@ -7,8 +7,8 @@ integrating four complementary tools:
 |---|---|
 | `circ.limbr` | KNN imputation + SVA-based batch effect removal |
 | `circ.pirs` | Prediction Interval Ranking Score for constitutive expression |
-| `circ.bootjtk` | Bootstrap empirical JTK circadian rhythm detection |
-| `circ.expression_classification` | Unified classifier combining PIRS and BooteJTK |
+| `circ.rhythmicity` | BooteJTK + ECHO circadian rhythmicity detection and classification |
+| `circ.expression_classification` | Unified classifier combining PIRS, BooteJTK, and ECHO |
 | `circ.visualization` | Classification, comparison, and benchmark plots |
 | `circ.compare` | Cross-condition and cross-omics comparison |
 
@@ -30,7 +30,7 @@ cd CIRC
 poetry install
 ```
 
-For optional Numba acceleration of BooteJTK:
+For optional Numba acceleration of BooteJTK (part of `circ.rhythmicity`):
 
 ```bash
 poetry install --extras fast
@@ -136,7 +136,7 @@ sva_obj.output_default("normalized.parquet")
 normalized = sva_obj.svd_norm   # DataFrame available directly after normalize()
 
 clf = Classifier(normalized, reps=2)
-result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4)
+result = clf.run_all(slope_pvals=True, n_permutations=1000, n_jobs=4, echo=True)
 ```
 
 For finer control over the PIRS step (e.g. writing ranked scores to disk):
@@ -165,20 +165,22 @@ circ COMMAND [options]
 | `impute` | LIMBR | KNN imputation of missing data |
 | `normalize` | LIMBR | SVA batch effect removal |
 | `rank` | PIRS | Rank profiles by constitutiveness |
+| `classify` | PIRS + BooteJTK (+ ECHO) | Full expression classification pipeline |
 | `rhythm` | BooteJTK | Bootstrap JTK rhythm detection |
 | `rhythm-calcp` | BooteJTK | Bootstrap JTK + CalcP full pipeline |
 
 For full flag reference see the module READMEs:
 [`circ impute` / `circ normalize`](circ/limbr/README.md) ·
 [`circ rank`](circ/pirs/README.md) ·
-[`circ rhythm` / `circ rhythm-calcp`](circ/bootjtk/README.md)
+[`circ classify`](circ/expression_classification/README.md) ·
+[`circ rhythm` / `circ rhythm-calcp`](circ/rhythmicity/README.md)
 
 ## Module API
 
 Full API reference for each module lives in its own README:
 [`circ.limbr`](circ/limbr/README.md) ·
 [`circ.pirs`](circ/pirs/README.md) ·
-[`circ.bootjtk`](circ/bootjtk/README.md) ·
+[`circ.rhythmicity`](circ/rhythmicity/README.md) ·
 [`circ.expression_classification`](circ/expression_classification/README.md) ·
 [`circ.visualization`](circ/visualization/README.md)
 
@@ -277,8 +279,8 @@ Full license texts and attribution details are in `NOTICE`.
 |---|---|---|
 | `circ.limbr` | Alexander M. Crowell (2017) | BSD 3-Clause |
 | `circ.pirs` | Alexander M. Crowell (2017) | BSD 3-Clause |
-| `circ.bootjtk` | Alan L. Hutchison (2016) | MIT |
-| `circ/bootjtk/mpfit.py` | More' et al. → C. Markwardt → M. Rivers | — |
+| `circ.rhythmicity` (BooteJTK) | Alan L. Hutchison (2016) | MIT |
+| `circ/rhythmicity/mpfit.py` | More' et al. → C. Markwardt → M. Rivers | — |
 
 ### Key publications
 
@@ -291,3 +293,7 @@ Full license texts and attribution details are in `NOTICE`.
   11(3): e1004094. doi:10.1371/journal.pcbi.1004094
 - **BooteJTK (bootstrap extension)**: Hutchison AL et al. "BooteJTK:
   Improved Rhythm Detection via Bootstrapping." *bioRxiv* 2016.
+- **ECHO**: De los Santos H et al. "ECHO: an application for detection
+  and analysis of oscillators identifies metabolic regulation on genome-wide
+  circadian output." *Bioinformatics* 2019 36(3): 773–781.
+  doi:10.1093/bioinformatics/btz617
