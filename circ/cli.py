@@ -356,12 +356,12 @@ def main() -> None:
         _run_classify(args)
     elif args.command == "rhythm":
         sys.argv = [sys.argv[0]] + (args.bootejtk_args or [])
-        from circ.bootjtk.BooteJTK import cli
+        from circ.rhythmicity.BooteJTK import cli
 
         cli()
     elif args.command == "rhythm-calcp":
         sys.argv = [sys.argv[0]] + (args.bootejtk_args or [])
-        from circ.bootjtk.pipeline import cli
+        from circ.rhythmicity.pipeline import cli
 
         cli()
     else:

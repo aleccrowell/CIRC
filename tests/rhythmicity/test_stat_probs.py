@@ -1,9 +1,10 @@
 """Tests for the get_stat_probs module."""
+
 import math
 import numpy as np
 import pytest
 
-from circ.bootjtk.get_stat_probs import (
+from circ.rhythmicity.get_stat_probs import (
     kt,
     generate_base_reference,
     get_matches,
@@ -77,50 +78,50 @@ class TestGenerateBaseReference:
     HEADER = list(range(0, 24, 2))  # 12 evenly-spaced ZT timepoints
 
     def test_cosine_correct_length(self):
-        ref = generate_base_reference(self.HEADER, 'cosine', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "cosine", 24.0, 0.0, 12.0)
         assert len(ref) == len(self.HEADER)
 
     def test_trough_correct_length(self):
-        ref = generate_base_reference(self.HEADER, 'trough', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "trough", 24.0, 0.0, 12.0)
         assert len(ref) == len(self.HEADER)
 
     def test_cosine_peak_at_phase_zero(self):
         # With phase=0 the cosine peak lands at ZT0 (first element)
-        ref = generate_base_reference(self.HEADER, 'cosine', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "cosine", 24.0, 0.0, 12.0)
         assert ref[0] == pytest.approx(max(ref), abs=1e-6)
 
     def test_cosine_peak_shifts_with_phase(self):
-        ref0 = generate_base_reference(self.HEADER, 'cosine', 24.0, 0.0, 12.0)
-        ref6 = generate_base_reference(self.HEADER, 'cosine', 24.0, 6.0, 12.0)
+        ref0 = generate_base_reference(self.HEADER, "cosine", 24.0, 0.0, 12.0)
+        ref6 = generate_base_reference(self.HEADER, "cosine", 24.0, 6.0, 12.0)
         # Different phases should produce different waveforms
         assert not np.allclose(ref0, ref6)
 
     def test_cosine_values_bounded(self):
-        ref = generate_base_reference(self.HEADER, 'cosine', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "cosine", 24.0, 0.0, 12.0)
         assert all(-1.001 <= v <= 1.001 for v in ref)
 
     def test_trough_values_bounded(self):
-        ref = generate_base_reference(self.HEADER, 'trough', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "trough", 24.0, 0.0, 12.0)
         assert all(-1.001 <= v <= 1.001 for v in ref)
 
     def test_returns_numpy_array(self):
-        ref = generate_base_reference(self.HEADER, 'cosine', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "cosine", 24.0, 0.0, 12.0)
         assert isinstance(ref, np.ndarray)
 
     def test_impulse_correct_length(self):
-        ref = generate_base_reference(self.HEADER, 'impulse', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "impulse", 24.0, 0.0, 12.0)
         assert len(ref) == len(self.HEADER)
 
     def test_step_correct_length(self):
-        ref = generate_base_reference(self.HEADER, 'step', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "step", 24.0, 0.0, 12.0)
         assert len(ref) == len(self.HEADER)
 
     def test_impulse_values_nonnegative(self):
-        ref = generate_base_reference(self.HEADER, 'impulse', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "impulse", 24.0, 0.0, 12.0)
         assert all(v >= -1e-9 for v in ref)
 
     def test_step_values_binary(self):
-        ref = generate_base_reference(self.HEADER, 'step', 24.0, 0.0, 12.0)
+        ref = generate_base_reference(self.HEADER, "step", 24.0, 0.0, 12.0)
         assert all(v in (0.0, 1.0) for v in ref)
 
 
@@ -128,8 +129,8 @@ class TestGetWaveformList:
     # get_waveform_list pre-allocates int(n_phases * n_widths / 2) slots and
     # deduplicates (phase, nadir) pairs. Use the canonical reference-file inputs
     # (12 phases × 11 widths) so the formula holds.
-    PHASES = np.array(list(range(0, 24, 2)))   # 12 values
-    WIDTHS = np.array(list(range(2, 24, 2)))   # 11 values
+    PHASES = np.array(list(range(0, 24, 2)))  # 12 values
+    WIDTHS = np.array(list(range(2, 24, 2)))  # 11 values
 
     def test_returns_2d_array(self):
         triples = get_waveform_list(np.array([24]), self.PHASES, self.WIDTHS)
@@ -184,8 +185,8 @@ class TestMakeReferences:
 
     def test_trough_waveform_differs_from_cosine(self):
         triples = get_waveform_list(np.array([24]), self.PHASES, self.WIDTHS)
-        dref_cos = make_references(self.HEADER, triples, waveform='cosine')
-        dref_tr = make_references(self.HEADER, triples, waveform='trough')
+        dref_cos = make_references(self.HEADER, triples, waveform="cosine")
+        dref_tr = make_references(self.HEADER, triples, waveform="trough")
         key = list(dref_cos.keys())[0]
         assert not np.allclose(dref_cos[key], dref_tr[key])
 
@@ -266,8 +267,8 @@ class TestGetStatProbs:
         out1, out2, d_tau, d_per, d_ph, d_na = get_stat_probs(
             self.dorder, self.HEADER, self.triples, self.dref, self.ref_ranks, 10
         )
-        assert len(out1) == 6   # [m_per, s_per, m_ph, s_ph, m_na, s_na]
-        assert len(out2) == 2   # [m_tau, s_tau]
+        assert len(out1) == 6  # [m_per, s_per, m_ph, s_ph, m_na, s_na]
+        assert len(out2) == 2  # [m_tau, s_tau]
 
     def test_mean_tau_finite(self):
         _, out2, *_ = get_stat_probs(

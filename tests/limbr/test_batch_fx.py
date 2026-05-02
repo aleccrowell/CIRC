@@ -88,7 +88,9 @@ def test_prim_cor_4h_sampling_nonzero(tmp_path):
     obj.pool_normalize()
     obj.get_tpoints()
     obj.prim_cor()
-    assert not np.all(obj.cors == 0), "all cors zero — per likely aliased to a no-op shift"
+    assert not np.all(obj.cors == 0), (
+        "all cors zero — per likely aliased to a no-op shift"
+    )
 
 
 def test_prim_cor_timecourse_length(rnaseq_file):

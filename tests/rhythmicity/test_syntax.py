@@ -1,4 +1,5 @@
 """Verify that every .py file in the project parses as valid Python 3 syntax."""
+
 import py_compile
 from pathlib import Path
 
@@ -8,8 +9,7 @@ ROOT = Path(__file__).parent.parent.parent
 _SKIP_DIRS = {".venv", "__pycache__", ".git", "build", "dist"}
 
 _PY_FILES = sorted(
-    p for p in ROOT.rglob("*.py")
-    if not _SKIP_DIRS.intersection(p.parts)
+    p for p in ROOT.rglob("*.py") if not _SKIP_DIRS.intersection(p.parts)
 )
 
 

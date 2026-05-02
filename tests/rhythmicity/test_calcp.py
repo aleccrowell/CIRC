@@ -1,8 +1,9 @@
 """Tests for CalcP.py functions."""
+
 import numpy as np
 import pytest
 
-import circ.bootjtk.CalcP as CalcP
+import circ.rhythmicity.CalcP as CalcP
 
 
 class TestEmpP:

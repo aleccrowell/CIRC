@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from circ.bootjtk.limma_preprocess import (
+from circ.rhythmicity.limma_preprocess import (
     read_timeseries,
     parse_timepoint_label,
     deduplicate_timepoints,
@@ -293,7 +293,7 @@ class TestWriteLimmaOutputs:
         assert means.shape == (2, 2)  # 2 genes × 2 time points
 
     def test_readable_by_bootjtk_read_in(self, tmp_path, long_df):
-        from circ.bootjtk.BooteJTK import read_in
+        from circ.rhythmicity.BooteJTK import read_in
 
         write_limma_outputs(long_df, str(tmp_path / "s"), "postLimma")
         header, data = read_in(str(tmp_path / "s_Means_postLimma.txt"))

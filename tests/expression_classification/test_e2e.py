@@ -5,6 +5,7 @@ with known ground-truth class labels (constitutive / linear / circadian).
 Verifies that the five-label scheme is populated correctly and that the
 slope p-values are directionally consistent with the known gene classes.
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -24,8 +25,13 @@ def e2e_data(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("classify_e2e")
     out = str(tmp / "e2e_expr.txt")
     sim = simulate(
-        tpoints=6, nrows=60, nreps=2, tpoint_space=4,
-        pcirc=0.3, plin=0.3, rseed=11,
+        tpoints=6,
+        nrows=60,
+        nreps=2,
+        tpoint_space=4,
+        pcirc=0.3,
+        plin=0.3,
+        rseed=11,
     )
     sim.write_output(out_name=out)
     true_classes = pd.read_csv(out[:-4] + "_true_classes.txt", sep="\t", index_col=0)
@@ -51,7 +57,13 @@ class TestClassifierE2EBasic:
         expr_file, _ = e2e_data
         clf = Classifier(expr_file, size=10, reps=2)
         result = clf.run_all()
-        valid = {"constitutive", "rhythmic", "variable", "noisy_rhythmic", "unclassified"}
+        valid = {
+            "constitutive",
+            "rhythmic",
+            "variable",
+            "noisy_rhythmic",
+            "unclassified",
+        }
         assert set(result["label"].unique()).issubset(valid)
         assert "linear" not in result["label"].values
 
@@ -96,24 +108,41 @@ class TestClassifierE2EWithSlopePvals:
             assert (vals >= 0).all() and (vals <= 1).all()
 
     def test_five_class_scheme_used(self, result_with_slope):
-        valid = {"constitutive", "rhythmic", "linear", "variable", "noisy_rhythmic", "unclassified"}
+        valid = {
+            "constitutive",
+            "rhythmic",
+            "linear",
+            "variable",
+            "noisy_rhythmic",
+            "unclassified",
+        }
         assert set(result_with_slope["label"].unique()).issubset(valid)
 
     def test_linear_label_appears_with_lenient_threshold(self, e2e_data):
         """Forcing slope_pval_threshold=1.0 classifies all non-rhythmic genes as linear."""
         expr_file, _ = e2e_data
         clf = Classifier(expr_file, size=10, reps=2)
-        result = clf.run_all(slope_pvals=True, n_permutations=99, slope_pval_threshold=1.0)
+        result = clf.run_all(
+            slope_pvals=True, n_permutations=99, slope_pval_threshold=1.0
+        )
         assert "linear" in result["label"].values
 
-    def test_known_linear_genes_have_lower_slope_pval(self, e2e_data, result_with_slope):
+    def test_known_linear_genes_have_lower_slope_pval(
+        self, e2e_data, result_with_slope
+    ):
         _, true_classes = e2e_data
         shared = result_with_slope.index.intersection(true_classes.index)
-        linear_ids = true_classes.loc[shared][true_classes.loc[shared, "Linear"] == 1].index
-        const_ids = true_classes.loc[shared][true_classes.loc[shared, "Const"] == 1].index
+        linear_ids = true_classes.loc[shared][
+            true_classes.loc[shared, "Linear"] == 1
+        ].index
+        const_ids = true_classes.loc[shared][
+            true_classes.loc[shared, "Const"] == 1
+        ].index
         if len(linear_ids) >= 3 and len(const_ids) >= 3:
-            assert (result_with_slope.loc[linear_ids, "slope_pval"].mean() <
-                    result_with_slope.loc[const_ids, "slope_pval"].mean())
+            assert (
+                result_with_slope.loc[linear_ids, "slope_pval"].mean()
+                < result_with_slope.loc[const_ids, "slope_pval"].mean()
+            )
 
 
 class TestClassifierE2EWithAllPvals:

@@ -6,25 +6,26 @@ Tests exercise the full programmatic pipeline:
   - BooteJTK: phase and period are recovered accurately
   - CalcP: valid p-values produced; rhythmic genes are significant
 """
+
 import argparse
 import os
 import numpy as np
 import pandas as pd
 import pytest
 
-from circ.bootjtk import BooteJTK, CalcP
-from circ.bootjtk.BooteJTK import _REF_DIR
+from circ.rhythmicity import BooteJTK, CalcP
+from circ.rhythmicity.BooteJTK import _REF_DIR
 
 
 # ── simulation parameters ─────────────────────────────────────────────────
 
-PERIOD      = 24
-N_TP        = 12       # unique ZT timepoints per cycle (ZT0, ZT2, …, ZT22)
-AMPLITUDE   = 2.0      # peak-to-mean signal amplitude (SNR ≈ 40 vs noise)
-NOISE_SD    = 0.05     # per-observation noise for rhythmic genes
-FLAT_SD     = 0.30     # noise for flat/arrhythmic genes
-BOOTSTRAPS  = 30       # small enough to be fast, large enough to be stable
-N_NULL      = 100      # white-noise genes used to build the null distribution
+PERIOD = 24
+N_TP = 12  # unique ZT timepoints per cycle (ZT0, ZT2, …, ZT22)
+AMPLITUDE = 2.0  # peak-to-mean signal amplitude (SNR ≈ 40 vs noise)
+NOISE_SD = 0.05  # per-observation noise for rhythmic genes
+FLAT_SD = 0.30  # noise for flat/arrhythmic genes
+BOOTSTRAPS = 30  # small enough to be fast, large enough to be stable
+N_NULL = 100  # white-noise genes used to build the null distribution
 
 # Phase search grid is 0–22 by 2 h, so use multiples of 2 for exact recovery.
 TRUE_PHASES = (0, 6, 12, 18)
@@ -32,10 +33,11 @@ TRUE_PHASES = (0, 6, 12, 18)
 
 # ── data-generation helpers ───────────────────────────────────────────────
 
+
 def _zt_header():
     """Return (time_array, label_list) covering two full 24-h cycles (24 cols)."""
-    times = np.arange(N_TP) * (PERIOD / N_TP)     # 0, 2, 4, …, 22
-    full  = np.concatenate([times, times + PERIOD])  # 0..22, 24..46
+    times = np.arange(N_TP) * (PERIOD / N_TP)  # 0, 2, 4, …, 22
+    full = np.concatenate([times, times + PERIOD])  # 0..22, 24..46
     return full, [f"ZT{int(t)}" for t in full]
 
 
@@ -49,14 +51,14 @@ def write_simulated_data(path, rng):
     rows = []
 
     for ph in TRUE_PHASES:
-        gid  = f"rhythm_{ph:02d}h"
-        sig  = AMPLITUDE * np.cos(2 * np.pi * (full_times - ph) / PERIOD) + 10.0
+        gid = f"rhythm_{ph:02d}h"
+        sig = AMPLITUDE * np.cos(2 * np.pi * (full_times - ph) / PERIOD) + 10.0
         vals = sig + rng.normal(0, NOISE_SD, len(full_times))
         rows.append((gid, vals))
         gene_info[gid] = ph
 
     for i in range(4):
-        gid  = f"flat_{i}"
+        gid = f"flat_{i}"
         vals = rng.normal(10.0, FLAT_SD, len(full_times))
         rows.append((gid, vals))
         gene_info[gid] = None
@@ -80,6 +82,7 @@ def write_null_data(path, n_genes=N_NULL):
 
 
 # ── argparse helpers ──────────────────────────────────────────────────────
+
 
 def _bootejtk_args(data_file, size=BOOTSTRAPS):
     """Minimal Namespace accepted by BooteJTK.main()."""
@@ -112,6 +115,7 @@ def _calcp_args(signal_out, null_out):
 
 
 # ── module-scoped fixtures ────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def bootejtk_results(tmp_path_factory):
@@ -150,6 +154,7 @@ def calcp_results(tmp_path_factory):
 
 # ── BooteJTK output structure ─────────────────────────────────────────────
 
+
 class TestBooteJTKOutputStructure:
     def test_correct_row_count(self, bootejtk_results):
         df, gene_info = bootejtk_results
@@ -157,8 +162,15 @@ class TestBooteJTKOutputStructure:
 
     def test_required_columns_present(self, bootejtk_results):
         df, _ = bootejtk_results
-        required = {"ID", "Waveform", "TauMean", "TauStdDev",
-                    "PhaseMean", "PhaseStdDev", "PeriodMean"}
+        required = {
+            "ID",
+            "Waveform",
+            "TauMean",
+            "TauStdDev",
+            "PhaseMean",
+            "PhaseStdDev",
+            "PeriodMean",
+        }
         assert required.issubset(df.columns)
 
     def test_all_gene_ids_in_output(self, bootejtk_results):
@@ -188,6 +200,7 @@ class TestBooteJTKOutputStructure:
 
 # ── rhythm detection accuracy ─────────────────────────────────────────────
 
+
 class TestRhythmDetection:
     def test_rhythmic_genes_have_high_tau(self, bootejtk_results):
         """Strong cosine signal (SNR ≈ 40) should produce TauMean > 0.5.
@@ -205,8 +218,10 @@ class TestRhythmDetection:
     def test_rhythmic_beats_flat_on_average(self, bootejtk_results):
         df, gene_info = bootejtk_results
         df = df.set_index("ID")
-        rhythmic_tau = df.loc[[g for g, p in gene_info.items() if p is not None], "TauMean"]
-        flat_tau     = df.loc[[g for g, p in gene_info.items() if p is None],     "TauMean"]
+        rhythmic_tau = df.loc[
+            [g for g, p in gene_info.items() if p is not None], "TauMean"
+        ]
+        flat_tau = df.loc[[g for g, p in gene_info.items() if p is None], "TauMean"]
         assert rhythmic_tau.mean() > flat_tau.mean()
 
     def test_period_recovered_as_24h(self, bootejtk_results):
@@ -237,7 +252,7 @@ class TestRhythmDetection:
         """Genes with phases 6 h apart should be distinguished."""
         df, gene_info = bootejtk_results
         df = df.set_index("ID")
-        phase_0  = df.loc["rhythm_00h", "PhaseMean"]
+        phase_0 = df.loc["rhythm_00h", "PhaseMean"]
         phase_12 = df.loc["rhythm_12h", "PhaseMean"]
         circ_diff = abs((phase_0 - phase_12 + PERIOD / 2) % PERIOD - PERIOD / 2)
         assert circ_diff >= 6, (
@@ -247,6 +262,7 @@ class TestRhythmDetection:
 
 
 # ── CalcP / full pipeline tests ────────────────────────────────────────────
+
 
 class TestCalcPOutput:
     def test_correct_row_count(self, calcp_results):
@@ -262,7 +278,9 @@ class TestCalcPOutput:
         df, _ = calcp_results
         for col in ("empP", "GammaP", "GammaBH"):
             out_of_range = df[col][~df[col].between(0, 1)]
-            assert out_of_range.empty, f"{col} has out-of-range values: {out_of_range.tolist()}"
+            assert out_of_range.empty, (
+                f"{col} has out-of-range values: {out_of_range.tolist()}"
+            )
 
     def test_gammabh_geq_gammap(self, calcp_results):
         """FDR-corrected values should be ≥ the uncorrected p-values."""
@@ -285,7 +303,9 @@ class TestCalcPOutput:
 
     def test_flat_genes_have_higher_pvalues_than_rhythmic(self, calcp_results):
         df, gene_info = calcp_results
-        r_max_p = max(df.loc[g, "GammaP"] for g, p in gene_info.items() if p is not None)
+        r_max_p = max(
+            df.loc[g, "GammaP"] for g, p in gene_info.items() if p is not None
+        )
         f_min_p = min(df.loc[g, "GammaP"] for g, p in gene_info.items() if p is None)
         assert r_max_p < f_min_p, (
             f"All rhythmic GammaP values ({r_max_p:.4f}) should be below "

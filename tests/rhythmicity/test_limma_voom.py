@@ -1,9 +1,10 @@
 """Tests for bootjtk.limma_voom — the Python vooma + eBayes preprocessing."""
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from circ.bootjtk.limma_voom import (
+from circ.rhythmicity.limma_voom import (
     _vooma_stats,
     _estimate_prior,
     _posterior_sd,
@@ -15,17 +16,22 @@ from circ.bootjtk.limma_voom import (
 
 # ── fixtures ──────────────────────────────────────────────────────────────
 
+
 def _make_df(n_genes=10, n_reps=2, period=24, seed=0):
     """Wide-format DataFrame: genes × timepoints, 2 reps per ZT (ZT0..ZT22 × 2)."""
     rng = np.random.default_rng(seed)
-    times = list(range(0, 24, 2))                  # 12 unique ZTs
-    cols = times + [t + 24 for t in times]          # two cycles → 24 columns
+    times = list(range(0, 24, 2))  # 12 unique ZTs
+    cols = times + [t + 24 for t in times]  # two cycles → 24 columns
     data = 10 + rng.normal(0, 0.5, size=(n_genes, len(cols)))
-    return pd.DataFrame(data, index=[f"gene_{i}" for i in range(n_genes)],
-                        columns=pd.Index(cols, dtype=float))
+    return pd.DataFrame(
+        data,
+        index=[f"gene_{i}" for i in range(n_genes)],
+        columns=pd.Index(cols, dtype=float),
+    )
 
 
 # ── _vooma_stats ──────────────────────────────────────────────────────────
+
 
 class TestVoomaStats:
     def test_output_shape(self):
@@ -84,6 +90,7 @@ class TestVoomaStats:
 
 # ── _estimate_prior ───────────────────────────────────────────────────────
 
+
 class TestEstimatePrior:
     def test_returns_two_floats(self):
         sds = np.abs(np.random.default_rng(0).normal(1, 0.2, 100))
@@ -117,10 +124,13 @@ class TestEstimatePrior:
 
 # ── _posterior_sd ─────────────────────────────────────────────────────────
 
+
 class TestPosteriorSd:
     def test_equals_prior_when_no_data(self):
         # df=0 or NaN sd → should fall back to prior
-        result = _posterior_sd(np.array([np.nan, np.nan]), np.array([0.0, 0.0]), d0=4.0, s0=1.0)
+        result = _posterior_sd(
+            np.array([np.nan, np.nan]), np.array([0.0, 0.0]), d0=4.0, s0=1.0
+        )
         np.testing.assert_allclose(result, 1.0)
 
     def test_shrinks_toward_prior(self):
@@ -144,11 +154,13 @@ class TestPosteriorSd:
 
 # ── _impute_na ────────────────────────────────────────────────────────────
 
+
 class TestImputeNa:
     def test_no_nan_in_output(self):
         rng = np.random.default_rng(0)
-        df = pd.DataFrame(rng.normal(10, 1, (8, 4)),
-                          columns=pd.Index([0.0, 1.0, 2.0, 3.0]))
+        df = pd.DataFrame(
+            rng.normal(10, 1, (8, 4)), columns=pd.Index([0.0, 1.0, 2.0, 3.0])
+        )
         df.iloc[0, 1] = np.nan
         df.iloc[2, :] = np.nan
         result = _impute_na(df)
@@ -169,6 +181,7 @@ class TestImputeNa:
 
 
 # ── run_vooma_ebayes (integration) ────────────────────────────────────────
+
 
 class TestRunVoomaEbayes:
     def test_output_columns(self):
@@ -227,6 +240,7 @@ class TestRunVoomaEbayes:
 
 # ── run_vooma_vash (integration) ──────────────────────────────────────────
 
+
 class TestRunVoomaVash:
     def test_output_columns(self):
         result = run_vooma_vash(_make_df(), period=24)
@@ -253,9 +267,11 @@ class TestRunVoomaVash:
 
 # ── write_limma_outputs round-trip ────────────────────────────────────────
 
+
 class TestWriteLimmaOutputsRoundTrip:
     def test_round_trip_produces_correct_files(self, tmp_path):
-        from circ.bootjtk.limma_preprocess import write_limma_outputs
+        from circ.rhythmicity.limma_preprocess import write_limma_outputs
+
         df = _make_df(n_genes=4)
         long_df = run_vooma_ebayes(df, period=24)
         pref = str(tmp_path / "out")
@@ -263,10 +279,11 @@ class TestWriteLimmaOutputsRoundTrip:
         means_path = tmp_path / "out_Means_postLimma.txt"
         assert means_path.exists()
         wide = pd.read_table(str(means_path), index_col="ID")
-        assert wide.shape == (4, 12)   # 4 genes × 12 unique timepoints
+        assert wide.shape == (4, 12)  # 4 genes × 12 unique timepoints
 
     def test_sds_file_values_positive(self, tmp_path):
-        from circ.bootjtk.limma_preprocess import write_limma_outputs
+        from circ.rhythmicity.limma_preprocess import write_limma_outputs
+
         df = _make_df(n_genes=4)
         long_df = run_vooma_ebayes(df, period=24)
         write_limma_outputs(long_df, str(tmp_path / "out"), "postLimma")
