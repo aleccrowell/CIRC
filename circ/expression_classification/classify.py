@@ -88,6 +88,7 @@ class Classifier:
         self.workers = workers
         self.pirs_scores: pd.DataFrame | None = None
         self.rhythm_results: pd.DataFrame | None = None
+        self.echo_results: pd.DataFrame | None = None
         self.classifications: pd.DataFrame | None = None
 
     # ------------------------------------------------------------------
@@ -196,6 +197,34 @@ class Classifier:
 
         return self.rhythm_results
 
+    def run_echo(self, workers: int = 1) -> pd.DataFrame:
+        """Fit the ECHO amplitude-aware circadian model to every gene.
+
+        Fits the model ``x(t) = A·exp(−γt²)·cos(ωt+φ) + y`` per gene and
+        classifies the amplitude change coefficient γ as:
+
+        - ``'damped'``   — γ > 0.03 (amplitude decreases over time)
+        - ``'harmonic'`` — |γ| ≤ 0.03 (constant amplitude)
+        - ``'forced'``   — γ < −0.03 (amplitude increases over time)
+
+        Parameters
+        ----------
+        workers : int
+            Parallel processes.  0 = all CPUs.  Default 1.
+
+        Returns
+        -------
+        pd.DataFrame
+            ECHO results indexed by gene ID.  Key columns include
+            ``echo_gamma``, ``echo_amplitude_class``, ``echo_tau``,
+            ``echo_p_bh``, ``echo_period``, ``echo_phase``.
+        """
+        from circ.bootjtk.echo_fit import EchoFitter
+
+        fitter = EchoFitter(self._source, reps=self.reps)
+        self.echo_results = fitter.fit(workers=workers)
+        return self.echo_results
+
     # ------------------------------------------------------------------
     # Classification
     # ------------------------------------------------------------------
@@ -206,6 +235,8 @@ class Classifier:
         slope_pval_threshold: float = 0.05,
         tau_threshold: float = 0.5,
         emp_p_threshold: float = 0.05,
+        echo: bool = False,
+        echo_p_threshold: float = 0.05,
     ) -> pd.DataFrame:
         """Assign class labels using pre-computed PIRS and BooteJTK results.
 
@@ -230,6 +261,17 @@ class Classifier:
         emp_p_threshold : float
             Maximum ``GammaBH`` FDR-corrected p-value for a rhythmicity call
             (default 0.05).  Only applied when ``GammaBH`` is present.
+        echo : bool
+            If ``True``, join ECHO amplitude-aware results onto the output.
+            Requires :meth:`run_echo` to have been called first.  Adds columns
+            ``echo_gamma``, ``echo_amplitude_class``, ``echo_tau``,
+            ``echo_p_bh``, ``echo_period``, ``echo_phase``, ``echo_A``,
+            ``echo_baseline``, ``echo_converged``.  ``echo_amplitude_class``
+            is set to ``None`` for genes whose ECHO p-value exceeds
+            ``echo_p_threshold``.
+        echo_p_threshold : float
+            Maximum BH-corrected ECHO p-value for an amplitude classification
+            to be reported (default 0.05).
 
         Returns
         -------
@@ -248,11 +290,14 @@ class Classifier:
             * ``n_boots`` – number of BooteJTK bootstrap iterations
             * ``label`` – one of ``constitutive``, ``rhythmic``, ``linear``,
               ``variable``, ``noisy_rhythmic``
+            * ECHO columns – present when *echo=True*
         """
         if self.pirs_scores is None:
             raise RuntimeError("Call run_pirs() before classify().")
         if self.rhythm_results is None:
             raise RuntimeError("Call run_bootjtk() before classify().")
+        if echo and self.echo_results is None:
+            raise RuntimeError("Call run_echo() before classify(echo=True).")
 
         tau_col = "TauMean" if "TauMean" in self.rhythm_results.columns else "Tau"
 
@@ -298,6 +343,14 @@ class Classifier:
                 for s, r in zip(stable, rhythmic)
             ]
 
+        if echo and self.echo_results is not None:
+            for col in self.echo_results.columns:
+                result[col] = self.echo_results[col]
+            # Clear amplitude class for genes below the ECHO significance threshold
+            if "echo_p_bh" in result.columns and "echo_amplitude_class" in result.columns:
+                non_sig = result["echo_p_bh"].isna() | (result["echo_p_bh"] > echo_p_threshold)
+                result.loc[non_sig, "echo_amplitude_class"] = None
+
         self.classifications = result
         return self.classifications
 
@@ -317,10 +370,14 @@ class Classifier:
         slope_pval_threshold: float = 0.05,
         tau_threshold: float = 0.5,
         emp_p_threshold: float = 0.05,
+        echo: bool = False,
+        echo_p_threshold: float = 0.05,
     ) -> pd.DataFrame:
-        """Run PIRS, BooteJTK, and classify in a single call.
+        """Run PIRS, BooteJTK, optionally ECHO, and classify in a single call.
 
-        Parameters mirror those of the individual methods.
+        Parameters mirror those of the individual methods.  Set ``echo=True``
+        to also run ECHO amplitude-aware fitting and include an
+        ``echo_amplitude_class`` column in the output.
 
         Returns
         -------
@@ -334,11 +391,15 @@ class Classifier:
             n_jobs=n_jobs,
         )
         self.run_bootjtk(basic=basic)
+        if echo:
+            self.run_echo(workers=self.workers)
         return self.classify(
             pirs_percentile=pirs_percentile,
             slope_pval_threshold=slope_pval_threshold,
             tau_threshold=tau_threshold,
             emp_p_threshold=emp_p_threshold,
+            echo=echo,
+            echo_p_threshold=echo_p_threshold,
         )
 
 

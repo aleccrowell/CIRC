@@ -56,6 +56,8 @@ def _run_classify(args: argparse.Namespace) -> None:
         pirs_percentile=args.pirs_percentile,
         tau_threshold=args.tau_threshold,
         emp_p_threshold=args.emp_p_threshold,
+        echo=args.echo,
+        echo_p_threshold=args.echo_p_threshold,
     )
     from circ.io import write_expression
 
@@ -256,6 +258,19 @@ def _add_classify_parser(
         "--limma",
         action="store_true",
         help="Use Limma/Vash variance shrinkage before BooteJTK",
+    )
+    p.add_argument(
+        "--echo",
+        action="store_true",
+        help="Run ECHO amplitude-aware fitting (adds echo_amplitude_class column)",
+    )
+    p.add_argument(
+        "--echo-p-threshold",
+        type=float,
+        default=0.05,
+        metavar="FLOAT",
+        dest="echo_p_threshold",
+        help="Maximum BH-corrected ECHO p-value for amplitude classification (default: 0.05)",
     )
     return p
 

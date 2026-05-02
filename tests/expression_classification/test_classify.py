@@ -280,6 +280,113 @@ class TestClassifierDataFrameAndParquet:
         assert len(scores) == len(df)
 
 
+# ---------------------------------------------------------------------------
+# Unit tests: ECHO integration
+# ---------------------------------------------------------------------------
+
+class TestRunEcho:
+    def test_returns_dataframe(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_echo()
+        assert isinstance(result, pd.DataFrame)
+
+    def test_stores_echo_results(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_echo()
+        assert clf.echo_results is not None
+
+    def test_expected_columns_present(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_echo()
+        for col in ("echo_A", "echo_gamma", "echo_period", "echo_phase",
+                    "echo_baseline", "echo_tau", "echo_p", "echo_p_bh",
+                    "echo_amplitude_class", "echo_converged"):
+            assert col in result.columns, f"Missing column: {col}"
+
+    def test_amplitude_class_values(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_echo()
+        valid = {"damped", "harmonic", "forced", None}
+        for val in result["echo_amplitude_class"]:
+            assert val in valid, f"Unexpected amplitude class: {val!r}"
+
+    def test_result_covers_all_genes(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_echo()
+        raw = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        assert len(result) == len(raw)
+
+    def test_accepts_dataframe_source(self, simulated_expression_file):
+        df = pd.read_csv(simulated_expression_file, sep="\t", index_col=0)
+        clf = Classifier(df, size=10, reps=2)
+        result = clf.run_echo()
+        assert len(result) == len(df)
+
+
+class TestClassifyWithEcho:
+    @pytest.fixture(autouse=True)
+    def _prep(self, simulated_expression_file):
+        self.clf = Classifier(simulated_expression_file, size=10, reps=2)
+        self.clf.run_pirs()
+        self.clf.run_bootjtk()
+        self.clf.run_echo()
+
+    def test_echo_columns_in_result(self):
+        result = self.clf.classify(echo=True)
+        assert "echo_amplitude_class" in result.columns
+        assert "echo_gamma" in result.columns
+
+    def test_echo_amplitude_class_values(self):
+        result = self.clf.classify(echo=True)
+        valid = {"damped", "harmonic", "forced", None}
+        for val in result["echo_amplitude_class"]:
+            assert val in valid
+
+    def test_echo_absent_without_flag(self):
+        result = self.clf.classify(echo=False)
+        assert "echo_amplitude_class" not in result.columns
+
+    def test_label_column_still_present(self):
+        result = self.clf.classify(echo=True)
+        assert "label" in result.columns
+
+    def test_raises_without_run_echo(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_pirs()
+        clf.run_bootjtk()
+        with pytest.raises(RuntimeError, match="run_echo"):
+            clf.classify(echo=True)
+
+    def test_p_threshold_affects_amplitude_class_coverage(self):
+        result_strict = self.clf.classify(echo=True, echo_p_threshold=0.001)
+        result_lenient = self.clf.classify(echo=True, echo_p_threshold=1.0)
+        n_strict = result_strict["echo_amplitude_class"].notna().sum()
+        n_lenient = result_lenient["echo_amplitude_class"].notna().sum()
+        assert n_strict <= n_lenient
+
+
+class TestRunAllWithEcho:
+    def test_run_all_echo_adds_amplitude_class(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_all(echo=True)
+        assert "echo_amplitude_class" in result.columns
+
+    def test_run_all_echo_false_no_echo_cols(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        result = clf.run_all(echo=False)
+        assert "echo_amplitude_class" not in result.columns
+
+    def test_run_all_echo_sets_echo_results_attr(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_all(echo=True)
+        assert clf.echo_results is not None
+
+    def test_run_all_echo_false_leaves_echo_results_none(self, simulated_expression_file):
+        clf = Classifier(simulated_expression_file, size=10, reps=2)
+        clf.run_all(echo=False)
+        assert clf.echo_results is None
+
+
 class TestMakePipelineArgs:
     def test_returns_namespace(self):
         args = _make_pipeline_args(
