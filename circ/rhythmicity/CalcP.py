@@ -53,7 +53,7 @@ def main(args):
             for _ in range(2):
                 params = GammaFit(keys, intvalues, yerr, p0, limit)
                 p0 = params[0]
-    params = p0
+        params = p0
     gd = ss.gamma(params[0], params[1], params[2])
 
     if "boot" not in fn_jtk_core:

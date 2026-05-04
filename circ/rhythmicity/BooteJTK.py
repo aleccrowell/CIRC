@@ -316,18 +316,6 @@ def read_in_EMdata(fn):
     return WT
 
 
-# def get_SD_distr(dseries,reps,size):
-#    data = np.zeros(size)
-#    for j in xrange(size):
-#        ser = []
-#        for i in xrange(len(dseries[0])):
-#            ser.append(np.random.normal(dseries[0][i],dseries[1][i],size=reps))
-#        ser = np.concatenate(ser)
-#        SD = np.std(ser)
-#        data[j] = SD
-#    return data
-
-
 def append_out(fn_out, line):
     line = [str(l) for l in line]
     with open(fn_out, "a") as g:
@@ -381,8 +369,8 @@ def dict_data(data):
 
 
 def IQR_FC(series):
-    qlo = __score_at_percentile__(series, 25)
-    qhi = __score_at_percentile__(series, 75)
+    qlo = _score_at_percentile(series, 25)
+    qhi = _score_at_percentile(series, 75)
     if not is_number(qlo) or not is_number(qhi):
         return np.nan
     elif qhi == 0:
@@ -435,7 +423,7 @@ def series_std(series):
     return np.std(series)
 
 
-def __score_at_percentile__(ser, per):
+def _score_at_percentile(ser, per):
     ser = [float(se) for se in ser[1:] if is_number(se)]
     if len(ser) < 5:
         score = "NA"

@@ -97,6 +97,36 @@ def _save_null_cache(key, src_path):
     shutil.copy2(src_path, _cached_null_path(key))
 
 
+def _setup_noreps_args(source_fn: str, jtk_fn: str, args) -> None:
+    """Estimate per-timepoint SD from arrhythmic genes for the no-replicates path.
+
+    Reads *source_fn*, finds arrhythmic genes from the CalcP output at *jtk_fn*,
+    estimates a single pooled SD, writes _Sds / _Ns files, and sets
+    args.means / args.sds / args.ns in-place.
+    """
+    try:
+        df = pd.read_table(source_fn, index_col="ID")
+    except ValueError:
+        try:
+            df = pd.read_table(source_fn, index_col="#")
+        except ValueError:
+            raise ValueError(
+                f'Input file header must start with "ID" or "#": {source_fn!r}'
+            )
+    j = pd.read_table(jtk_fn, index_col="ID")
+    mean = df.loc[j[j.GammaP > 0.8].index].std(axis=1).dropna().mean()
+    df_sds = pd.DataFrame(np.ones(df.shape) * mean, index=df.index, columns=df.columns)
+    fn_sds = source_fn.replace(".txt", "_Sds_noRepsEst.txt")
+    df_sds.to_csv(fn_sds, na_rep=np.nan, sep="\t")
+    fn_ns = source_fn.replace(".txt", "_Ns_noRepsEst.txt")
+    pd.DataFrame(np.ones(df.shape), index=df.index, columns=df.columns).to_csv(
+        fn_ns, na_rep=np.nan, sep="\t"
+    )
+    args.means = source_fn
+    args.sds = fn_sds
+    args.ns = fn_ns
+
+
 def main(args):
 
     fn = args.filename
@@ -118,11 +148,11 @@ def main(args):
     size = int(args.size)
     reps = int(args.reps)
 
-    try:
-        assert ".txt" in fn or ".txt" in args.means
-    except AssertionError:
-        print("Please make the suffix of your raw data file or means file .txt")
-        assert 0
+    if ".txt" not in fn and ".txt" not in args.means:
+        raise ValueError(
+            "Input file or means file must have a .txt suffix; "
+            f"got filename={fn!r}, means={args.means!r}"
+        )
 
     if not args.basic:
         args.limma = True
@@ -140,28 +170,7 @@ def main(args):
         args.prefix = "NoRepSD_" + args.prefix
         print("No replicates, skipping Limma procedure")
         print("Estimating time point variance from arrhythmic genes")
-        try:
-            df = pd.read_table(fn, index_col="ID")
-        except ValueError:
-            df = pd.read_table(fn, index_col="#")
-        except ValueError:
-            print('Header needs to begin with "ID" or with "#"')
-
-        j = pd.read_table(args.jtk, index_col="ID")
-        mean = df.loc[j[j.GammaP > 0.8].index].std(axis=1).dropna().mean()
-
-        df_sds = pd.DataFrame(
-            np.ones(df.shape) * mean, index=df.index, columns=df.columns
-        )
-        df_ns = pd.DataFrame(np.ones(df.shape), index=df.index, columns=df.columns)
-        fn_sds = fn.replace(".txt", "_Sds_noRepsEst.txt")
-        df_sds.to_csv(fn_sds, na_rep=np.nan, sep="\t")
-        fn_ns = fn.replace(".txt", "_Ns_noRepsEst.txt")
-        df_sds.to_csv(fn_ns, na_rep=np.nan, sep="\t")
-
-        args.means = fn
-        args.sds = fn_sds
-        args.ns = fn_ns
+        _setup_noreps_args(fn, args.jtk, args)
 
     elif args.limma:
         pref = fn.replace(".txt", "")
@@ -230,28 +239,7 @@ def main(args):
         if args.noreps:
             print("No replicates, skipping Limma procedure")
             print("Estimating time point variance from arrhythmic genes")
-            try:
-                df = pd.read_table(fn, index_col="ID")
-            except ValueError:
-                df = pd.read_table(fn, index_col="#")
-            except ValueError:
-                print('Header needs to begin with "ID" or with "#"')
-
-            j = pd.read_table(args.jtk, index_col="ID")
-            mean = df.loc[j[j.GammaP > 0.8].index].std(axis=1).dropna().mean()
-
-            df_sds = pd.DataFrame(
-                np.ones(df.shape) * mean, index=df.index, columns=df.columns
-            )
-            df_ns = pd.DataFrame(np.ones(df.shape), index=df.index, columns=df.columns)
-            fn_sds = fn_null.replace(".txt", "_Sds_noRepsEst.txt")
-            df_sds.to_csv(fn_sds, na_rep=np.nan, sep="\t")
-            fn_ns = fn_null.replace(".txt", "_Ns_noRepsEst.txt")
-            df_sds.to_csv(fn_ns, na_rep=np.nan, sep="\t")
-
-            args.means = fn_null
-            args.sds = fn_sds
-            args.ns = fn_ns
+            _setup_noreps_args(fn_null, args.jtk, args)
         elif args.limma:
             pref_null = fn_null.replace(".txt", "")
             if not args.vash:

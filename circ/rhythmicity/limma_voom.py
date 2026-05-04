@@ -21,8 +21,6 @@ Both return a long-format DataFrame with columns:
 which is the format expected by ``limma_preprocess.write_limma_outputs``.
 """
 
-import warnings
-
 import numpy as np
 import pandas as pd
 from scipy.special import polygamma
@@ -56,10 +54,10 @@ def _vooma_stats(df_wide, period):
         vals = sub.to_numpy(dtype=float)
         n = np.sum(~np.isnan(vals), axis=1)
         means = np.nanmean(vals, axis=1)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            sds = np.nanstd(vals, axis=1, ddof=1)
-        sds[n < 2] = np.nan
+        sds = np.full(vals.shape[0], np.nan)
+        has_reps = n >= 2
+        if has_reps.any():
+            sds[has_reps] = np.nanstd(vals[has_reps], axis=1, ddof=1)
         dfs = np.where(n >= 2, n - 1, 0).astype(float)
         for i, gid in enumerate(df_wide.index):
             rows.append((gid, h, means[i], sds[i], dfs[i], int(n[i])))
@@ -196,10 +194,16 @@ def _impute_na(df):
     pd.DataFrame  – same shape, no NaN values.
     """
     vals = df.to_numpy(dtype=float).copy()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        row_sds = np.nanstd(vals, axis=1, ddof=1)
-        col_means = np.nanmean(vals, axis=0)
+    non_na_counts = np.sum(~np.isnan(vals), axis=1)
+    row_sds = np.full(vals.shape[0], np.nan)
+    has_reps = non_na_counts >= 2
+    if has_reps.any():
+        row_sds[has_reps] = np.nanstd(vals[has_reps], axis=1, ddof=1)
+    non_nan_per_col = np.sum(~np.isnan(vals), axis=0)
+    col_means = np.full(vals.shape[1], np.nan)
+    has_data_col = non_nan_per_col > 0
+    if has_data_col.any():
+        col_means[has_data_col] = np.nanmean(vals[:, has_data_col], axis=0)
     grand_mean = float(np.nanmean(col_means))
     grand_sd = float(np.nanstd(col_means, ddof=1)) if len(col_means) > 1 else 0.0
     finite_row_sds = row_sds[np.isfinite(row_sds)]

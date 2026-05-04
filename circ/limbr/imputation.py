@@ -58,7 +58,6 @@ class imputable:
         self.data = df
         self.miss = float(missingness)
         self.pats: dict[str, list[int]] = {}
-        self.notdone = True
         self.NN = neighbors
 
     def deduplicate(self) -> None:
@@ -69,6 +68,9 @@ class imputable:
         Groups rows by peptide, if a peptide appears in more than one row it is removed.
 
         """
+        # Check whether the second column's first value ends in e.g. "T4" or "T24"
+        # (a trailing digit preceded by "T"), which indicates peptides with
+        # ZT/CT-suffixed charge states that need to be stripped before grouping.
         if (self.data[self.data.columns.values[1]][0][-2] == "T") & (
             self.data[self.data.columns.values[1]][0][-1].isdigit()
         ):

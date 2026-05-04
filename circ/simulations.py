@@ -77,7 +77,7 @@ class simulate:
         pbatch: float = 0.5,
         effect_size: float = 2.0,
         p_miss: float = 0.0,
-        lam_miss: int = 5,
+        lam_miss: float = 5,
         rseed: int = 0,
     ) -> None:
         pconst = 1.0 - pcirc - plin
@@ -128,6 +128,8 @@ class simulate:
                 ]
                 raw[idx] = [v for t in zip(*reps) for v in t]
             else:  # constitutive
+                # Mean of 1 keeps the row non-zero so the unit-SD scaling denominator
+                # is well-defined after scale() is applied.
                 raw[idx] = np.random.normal(1, amp_noise, n_cols)
 
         self._raw = raw
