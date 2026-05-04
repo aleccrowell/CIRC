@@ -1,5 +1,6 @@
 import multiprocessing
 
+# forkserver avoids re-importing the full package in every worker on Linux/macOS
 _mp_ctx = multiprocessing.get_context("forkserver")
 
 from pathlib import Path
@@ -174,17 +175,26 @@ class ranker:
         from circ.io import read_expression
 
         self.data = read_expression(source)
+        # Drop all-zero rows before scoring — they produce degenerate PIRS scores
+        # (mean ≈ 0 forces the denominator clamp, making every gene look identical).
         self.data = self.data[(self.data.T != 0).any()]
         self.anova = anova
         self.errors: pd.DataFrame | None = None
 
     def get_tpoints(self) -> None:
         """Extract numeric timepoints from column headers (ZT/CT prefix)."""
-        tpoints = [
-            i.replace("ZT", "").replace("CT", "") for i in self.data.columns.values
-        ]
-        tpoints = [int(i.split("_")[0]) for i in tpoints]
-        self.tpoints = np.asarray(tpoints)
+        result = []
+        for col in self.data.columns.values:
+            stripped = str(col).replace("ZT", "").replace("CT", "")
+            try:
+                result.append(int(stripped.split("_")[0]))
+            except ValueError:
+                raise ValueError(
+                    f"Cannot parse timepoint from column {col!r}: expected a "
+                    f"ZT/CT-prefixed name like 'ZT04_1' or 'CT12', "
+                    f"got {stripped!r} after stripping the prefix"
+                )
+        self.tpoints = np.asarray(result)
 
     def remove_anova(self, alpha: float = 0.05) -> None:
         """Remove profiles with significant differential expression (one-way ANOVA).

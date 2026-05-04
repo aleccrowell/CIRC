@@ -10,7 +10,6 @@ def test_init_rnaseq(rnaseq_file):
     obj = old_fashioned(rnaseq_file, data_type="r")
     assert obj.data_type == "r"
     assert obj.raw_data is not None
-    assert obj.notdone is True
 
 
 def test_init_proteomics(proteomics_file):

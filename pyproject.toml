@@ -20,12 +20,11 @@ dependencies = [
     "matplotlib>=3.10",
     "pyarrow>=23.0.1",
     "seaborn>=0.11",
-    "ipykernel (>=7.2.0,<8.0.0)",
 ]
 
 [project.optional-dependencies]
 fast = ["numba>=0.50.0"]
-interactive = ["plotly>=6.0"]
+interactive = ["plotly>=6.0", "ipykernel>=6.0"]
 
 [project.scripts]
 circ = "circ.cli:main"
@@ -36,7 +35,9 @@ include = ["circ/rhythmicity/ref_files/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=circ --cov-report=term-missing --cov-report=xml"
+# Coverage flags are omitted here so that `poetry run pytest` works without the
+# dev dependency group.  CI passes --cov=circ --cov-report=term-missing
+# --cov-report=xml explicitly via the pytest command in the workflow.
 
 [tool.coverage.run]
 source = ["circ"]

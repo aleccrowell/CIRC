@@ -31,7 +31,6 @@ class analyze:
 
     def _build_curves(self) -> pd.DataFrame:
         """Compute per-method precision-recall curves and return as a DataFrame."""
-        curves = pd.DataFrame(columns=["precision", "recall", "method", "rep"])
         melted = (
             self.merged.pivot_table(
                 index=["rep", "method"], columns="#", values="score"
@@ -40,6 +39,7 @@ class analyze:
             .reset_index()
             .melt(id_vars=["rep", "method"], value_name="score")
         )
+        parts: list[pd.DataFrame] = []
         for rep in melted.rep.unique():
             for method in melted.method.unique():
                 pr = pd.merge(
@@ -47,19 +47,24 @@ class analyze:
                     melted[(melted.rep == rep) & (melted.method == method)],
                     on=["#", "rep"],
                 )
+                # Negate score so that smaller PIRS (more constitutive) → higher
+                # classifier confidence; avoids division by zero when score == 0.
                 precision, recall, _ = precision_recall_curve(
-                    pr["Const"].values, 1 / pr["score"].values, pos_label=1
+                    pr["Const"].values, -pr["score"].values, pos_label=1
                 )
-                temp = pd.DataFrame(
-                    {
-                        "precision": precision,
-                        "recall": recall,
-                        "method": method,
-                        "rep": rep,
-                    }
+                parts.append(
+                    pd.DataFrame(
+                        {
+                            "precision": precision,
+                            "recall": recall,
+                            "method": method,
+                            "rep": rep,
+                        }
+                    )
                 )
-                curves = pd.concat([curves, temp], sort=False)
-        return curves
+        if not parts:
+            return pd.DataFrame(columns=["precision", "recall", "method", "rep"])
+        return pd.concat(parts, sort=False)
 
     def generate_pr_curve(self, outpath: str = "PR.pdf") -> Any:
         """Build precision-recall curves and save to *outpath* (default PR.pdf)."""

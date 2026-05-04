@@ -1,4 +1,7 @@
 from scipy.stats import kendalltau as kt
+
+# Clip tau before arctanh to avoid ±inf at the boundary of (-1, 1)
+_TAU_CLIP = 0.99
 from scipy.stats import circmean as sscircmean
 from scipy.stats import circstd as sscircstd
 from scipy.stats import rankdata as _rankdata
@@ -87,7 +90,7 @@ def get_stat_probs(dorder, new_header, triples, dref, ref_ranks, size):
         minloc = new_header_arr[np.argmin(kkey_arr)]
 
         raw_taus = _batch_tau(kkey_arr, ref_ranks)
-        taus = np.arctanh(np.clip(raw_taus, -0.99, 0.99))
+        taus = np.arctanh(np.clip(raw_taus, -_TAU_CLIP, _TAU_CLIP))
         abs_taus = np.abs(taus)
 
         neg_mask = taus < 0
@@ -157,7 +160,7 @@ def generate_base_reference(
 
 
 def farctanh(x):
-    return float(np.arctanh(np.clip(x, -0.99, 0.99)))
+    return float(np.arctanh(np.clip(x, -_TAU_CLIP, _TAU_CLIP)))
 
 
 def periodic(x):

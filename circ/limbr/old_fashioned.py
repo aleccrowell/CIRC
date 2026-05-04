@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 
+from circ.limbr._normalize import _pool_norm, _qnorm
+
 
 class old_fashioned:
     """
@@ -55,7 +57,6 @@ class old_fashioned:
             self.raw_data = pd.read_csv(filename, sep="\t").set_index("#")
         if pool is not None:
             self.norm_map = pd.read_parquet(pool)["pool_number"].to_dict()
-        self.notdone = True
 
     def pool_normalize(self) -> None:
         """
@@ -74,76 +75,8 @@ class old_fashioned:
 
         """
 
-        def pool_norm(df, dmap):
-            """
-            Pool normalizes samples in a proteomics experiment.
-
-
-            Peptide abundances of each sample are divided by corresponding pooled control abundances.
-
-
-            Parameters
-            ----------
-            df : dataframe
-                The dataframe to be pool normalized.
-            dmap : dict
-                The dictionary connecting each sample to its corresponding pooled control.
-
-
-            Returns
-            -------
-            newdf : dataframe
-                Dataframe with samples pool normalized and pooled control columns dropped.
-
-            """
-
-            newdf = pd.DataFrame(index=df.index)
-            for column in df.columns.values:
-                if "pool" not in column:
-                    newdf[column] = df[column].div(
-                        df["pool_" + "%02d" % dmap[column]], axis="index"
-                    )
-            nonpool = [i for i in newdf.columns if "pool" not in i]
-            newdf = newdf[nonpool]
-            return newdf
-
-        def qnorm(df):
-            """
-            Quantile normalizes data by columns.
-
-
-            A reference distribution is generated as the mean across rows of the dataset with all columns sorted by abundance.  Each column is then quantile normalized to this target distribution.
-
-
-            Parameters
-            ----------
-            df : dataframe
-                The dataframe to be quantile normalized
-
-
-            Returns
-            -------
-            newdf : dataframe
-                The quantile normalized dataframe.
-
-            """
-
-            ref = (
-                pd.concat(
-                    [df[col].sort_values().reset_index(drop=True) for col in df],
-                    axis=1,
-                    ignore_index=True,
-                )
-                .mean(axis=1)
-                .values
-            )
-            for i in range(0, len(df.columns)):
-                df = df.sort_values(df.columns[i])
-                df[df.columns[i]] = ref
-            return df.sort_index()
-
         if self.data_type == "r":
-            self.data = qnorm(self.raw_data)
+            self.data = _qnorm(self.raw_data)
             self.scaler = preprocessing.StandardScaler().fit(self.data.values.T)
             self.data = pd.DataFrame(
                 self.scaler.transform(self.data.values.T).T,
@@ -151,11 +84,11 @@ class old_fashioned:
                 index=self.data.index,
             )
         else:
-            self.data_pnorm = pool_norm(self.raw_data, self.norm_map)
+            self.data_pnorm = _pool_norm(self.raw_data, self.norm_map)
             self.data_pnorm = self.data_pnorm.replace([np.inf, -np.inf], np.nan)
             self.data_pnorm = self.data_pnorm.dropna()
             self.data_pnorm = self.data_pnorm.sort_index(axis=1)
-            self.data_pnorm = qnorm(self.data_pnorm)
+            self.data_pnorm = _qnorm(self.data_pnorm)
             self.scaler = preprocessing.StandardScaler().fit(self.data_pnorm.values.T)
             self.data = pd.DataFrame(
                 self.scaler.transform(self.data_pnorm.values.T).T,

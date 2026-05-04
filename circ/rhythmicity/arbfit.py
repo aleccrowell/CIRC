@@ -13,58 +13,58 @@ from .mpfit import mpfit
 import warnings
 
 
-def line(x, p):
+def line(x, params):
     """Parameter: Slope, Intercept\n
     Return
     ------
-    >>> p[0]*x + p[1]
+    >>> params[0]*x + params[1]
     """
-    return p[0] * x + p[1]
+    return params[0] * x + params[1]
 
 
-def line0(x, p):
+def line0(x, params):
     """Parameter: Slope\n
     Return
     ------
-    >>> p[0]*x
+    >>> params[0]*x
     """
-    return p[0] * x
+    return params[0] * x
 
 
-def sine(x, p):
+def sine(x, params):
     """Parameter: Scale, Wavelength, Phase, Offset\n
     Return
     ------
-    >>> p[0]*np.sin(2*np.pi*x/p[1]+p[2])+p[3]
+    >>> params[0]*np.sin(2*np.pi*x/params[1]+params[2])+params[3]
     """
-    return p[0] * np.sin(2 * np.pi * x / p[1] + p[2]) + p[3]
+    return params[0] * np.sin(2 * np.pi * x / params[1] + params[2]) + params[3]
 
 
-def fermi(x, p):
+def fermi(x, params):
     """Parameter: Scale, Edge Position, Width, Offset\n
     Return
     ------
-    >>> p[0]/(np.exp((x-p[1])/p[2])+1)+p[3]
+    >>> params[0]/(np.exp((x-params[1])/params[2])+1)+params[3]
     """
-    return p[0] / (np.exp((x - p[1]) / p[2]) + 1) + p[3]
+    return params[0] / (np.exp((x - params[1]) / params[2]) + 1) + params[3]
 
 
-def gauss(x, p):
+def gauss(x, params):
     """Parameter: Scale, Mean, Std, Offset\n
     Return
     ------
-    >>> p[0]*np.exp(-0.5*(x-p[1])**2/p[2]**2)+p[3]
+    >>> params[0]*np.exp(-0.5*(x-params[1])**2/params[2]**2)+params[3]
     """
-    return p[0] * np.exp(-0.5 * (x - p[1]) ** 2 / p[2] ** 2) + p[3]
+    return params[0] * np.exp(-0.5 * (x - params[1]) ** 2 / params[2] ** 2) + params[3]
 
 
-def exp(x, p):
+def exp(x, params):
     """Parameter: Scale, Decay Time, Offset\n
     Return
     ------
-    >>> p[0]*np.exp(-x*p[1])+p[2]
+    >>> params[0]*np.exp(-x*params[1])+params[2]
     """
-    return p[0] * np.exp(-x * p[1]) + p[2]
+    return params[0] * np.exp(-x * params[1]) + params[2]
 
 
 def poly(x, p, n):

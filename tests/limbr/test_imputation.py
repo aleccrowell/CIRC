@@ -10,7 +10,6 @@ def test_init_loads_data(imputation_file):
     assert obj.data is not None
     assert obj.miss == 0.5
     assert obj.pats == {}
-    assert obj.notdone is True
 
 
 def test_init_custom_neighbors(imputation_file):

@@ -4,16 +4,13 @@ import os
 import shutil
 import tempfile
 import types
+from importlib.resources import files as _pkg_files
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-_REF_DIR = os.path.normpath(
-    os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "rhythmicity", "ref_files"
-    )
-)
+_REF_DIR = str(_pkg_files("circ.rhythmicity").joinpath("ref_files"))
 
 # (pirs_stable, rhythmic) -> label  — used when slope p-values are not available
 _LABEL_MAP = {
@@ -76,12 +73,14 @@ class Classifier:
         size: int = 50,
         workers: int = 1,
     ) -> None:
+        from circ.io import read_expression
+
         if isinstance(source, pd.DataFrame):
-            self._source = source
+            self._source: pd.DataFrame = source.copy()
             self.filename: str | None = None
         else:
-            self._source = os.path.abspath(str(source))
-            self.filename = self._source
+            self.filename = os.path.abspath(str(source))
+            self._source = read_expression(self.filename)
         self.anova = anova
         self.reps = reps
         self.size = size
@@ -161,17 +160,8 @@ class Classifier:
 
         workdir = tempfile.mkdtemp(prefix="circ_classify_")
         try:
-            if isinstance(self._source, pd.DataFrame):
-                fn_copy = os.path.join(workdir, "input.txt")
-                self._source.to_csv(fn_copy, sep="\t")
-            else:
-                src = str(self._source)
-                if src.endswith(".parquet"):
-                    fn_copy = os.path.join(workdir, "input.txt")
-                    pd.read_parquet(src).to_csv(fn_copy, sep="\t")
-                else:
-                    fn_copy = os.path.join(workdir, os.path.basename(src))
-                    shutil.copy2(src, fn_copy)
+            fn_copy = os.path.join(workdir, "input.txt")
+            self._source.to_csv(fn_copy, sep="\t")
 
             args = _make_pipeline_args(
                 filename=fn_copy,
