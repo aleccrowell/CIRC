@@ -3,6 +3,19 @@
 import argparse
 import sys
 
+from rich import box
+from rich.console import Console
+from rich.table import Table
+
+console = Console()
+
+_LABEL_STYLES: dict[str, str] = {
+    "rhythmic": "green",
+    "constitutive": "blue",
+    "variable": "yellow",
+    "noisy_rhythmic": "magenta",
+}
+
 
 # ---------------------------------------------------------------------------
 # Subcommand implementations
@@ -16,6 +29,9 @@ def _run_impute(args: argparse.Namespace) -> None:
         args.filename, missingness=args.missingness, neighbors=args.neighbors
     )
     obj.impute_data(args.output)
+    console.print(
+        f"[green]✓[/green] Imputed data written to [bold]{args.output}[/bold]"
+    )
 
 
 def _run_normalize(args: argparse.Namespace) -> None:
@@ -31,6 +47,9 @@ def _run_normalize(args: argparse.Namespace) -> None:
     obj.preprocess_default()
     obj.perm_test(nperm=args.nperm, npr=args.nproc)
     obj.output_default(args.output)
+    console.print(
+        f"[green]✓[/green] Normalized data written to [bold]{args.output}[/bold]"
+    )
 
 
 def _run_rank(args: argparse.Namespace) -> None:
@@ -38,7 +57,10 @@ def _run_rank(args: argparse.Namespace) -> None:
 
     obj = ranker(args.filename, anova=not args.no_anova)
     sorted_data = obj.pirs_sort(outname=args.output)
-    print(f"Ranked {len(sorted_data)} expression profiles → {args.output}")
+    console.print(
+        f"[green]✓[/green] Ranked [bold]{len(sorted_data)}[/bold] expression profiles"
+        f" → [bold]{args.output}[/bold]"
+    )
 
 
 def _run_classify(args: argparse.Namespace) -> None:
@@ -62,10 +84,26 @@ def _run_classify(args: argparse.Namespace) -> None:
     from circ.io import write_expression
 
     write_expression(result, args.output)
+
     counts = result["label"].value_counts().to_dict()
-    print(f"Classified {len(result)} genes → {args.output}")
+    total = len(result)
+
+    table = Table(
+        title=f"[bold]Classification results[/bold] — {args.output}",
+        title_justify="left",
+        box=box.SIMPLE_HEAD,
+        show_footer=True,
+    )
+    table.add_column("Label", style="bold", footer="[dim]Total[/dim]")
+    table.add_column("Genes", justify="right", footer=f"[bold]{total}[/bold]")
+    table.add_column("Fraction", justify="right", footer="")
+
     for label, n in sorted(counts.items()):
-        print(f"  {label}: {n}")
+        style = _LABEL_STYLES.get(label, "")
+        label_cell = f"[{style}]{label}[/{style}]" if style else label
+        table.add_row(label_cell, str(n), f"{n / total:.1%}")
+
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------
