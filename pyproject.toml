@@ -11,7 +11,7 @@ keywords = ["circadian", "bioinformatics", "SVA", "JTK", "proteomics", "RNAseq"]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.4",
-    "pandas>=3.0",
+    "pandas>=3.0.3",
     "scipy>=1.17",
     "scikit-learn>=1.8",
     "statsmodels>=0.14",
@@ -67,4 +67,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["pytest>=9.0.3", "plotly>=6.0", "ruff (>=0.15.12,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
+dev = ["pytest>=9.0.3", "plotly>=6.0", "ruff (>=0.15.13,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
