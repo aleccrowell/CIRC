@@ -100,3 +100,52 @@ def test_init_accepts_multiindex_dataframe(imputation_file):
     # MultiIndex should have been reset to flat columns for deduplicate()
     assert "Peptide" in obj.data.columns
     assert "Protein" in obj.data.columns
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: KNN neighbor handling (#39, #40)
+# ---------------------------------------------------------------------------
+
+
+def test_impute_keeps_nearest_neighbor(tmp_path):
+    # #39: query q matches a exactly on observed columns (a is the nearest
+    # neighbor) and b is far. With neighbors=2 the imputed value should be
+    # mean(a, b) = 50, not 0 (which is what dropping the nearest neighbor gave).
+    df = pd.DataFrame(
+        [[100.0, 5.0, 5.0], [0.0, 50.0, 50.0], [np.nan, 5.0, 5.0]],
+        columns=["ZT00_1", "ZT06_1", "ZT12_1"],
+    )
+    df.insert(0, "Protein", ["pA", "pB", "pQ"])
+    df.insert(0, "Peptide", ["a", "b", "q"])
+    out = str(tmp_path / "o.txt")
+    imputable(df, missingness=0.5, neighbors=2).impute_data(out)
+    result = pd.read_csv(out, sep="\t")
+    imputed = result.query("Peptide == 'q'")["ZT00_1"].iloc[0]
+    assert imputed == pytest.approx(50.0)
+
+
+def test_impute_clamps_neighbors_to_complete_cases(tmp_path):
+    # #40: fewer complete-case rows than requested neighbors must not raise.
+    cols = [f"ZT{2 * i:02d}_1" for i in range(6)]
+    rows = [list(np.random.RandomState(i).rand(6)) for i in range(4)]  # 4 complete
+    for i in range(4, 6):
+        r = list(np.random.RandomState(i).rand(6))
+        r[0] = np.nan
+        rows.append(r)  # 2 incomplete
+    df = pd.DataFrame(rows, columns=cols)
+    df.insert(0, "Protein", [f"p{i}" for i in range(6)])
+    df.insert(0, "Peptide", [f"pep{i}" for i in range(6)])
+    out = str(tmp_path / "o.txt")
+    imputable(df, missingness=0.5, neighbors=10).impute_data(out)  # must not raise
+    assert pd.read_csv(out, sep="\t").shape[0] == 6
+
+
+def test_impute_raises_without_complete_cases(tmp_path):
+    # Guard: no complete-case row to learn from -> clear error, not a crash.
+    cols = ["ZT00_1", "ZT06_1"]
+    df = pd.DataFrame([[np.nan, 1.0], [2.0, np.nan]], columns=cols)
+    df.insert(0, "Protein", ["pA", "pB"])
+    df.insert(0, "Peptide", ["a", "b"])
+    out = str(tmp_path / "o.txt")
+    with pytest.raises(ValueError, match="complete-case"):
+        imputable(df, missingness=0.9, neighbors=2).impute_data(out)

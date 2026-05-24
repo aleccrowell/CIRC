@@ -163,8 +163,11 @@ class imputable:
 
             # drop missing columns given missingness pattern
             newarr = comparr[:, ~np.array(list(pattern)).astype(int).astype(bool)]
-            # fit nearest neighbors
-            nbrs = NearestNeighbors(n_neighbors=self.NN).fit(newarr)
+            # Clamp neighbor count to the number of complete cases — fewer
+            # complete rows than self.NN is common in proteomics and otherwise
+            # makes kneighbors raise ValueError.
+            k = min(self.NN, len(comparr))
+            nbrs = NearestNeighbors(n_neighbors=k).fit(newarr)
             outa = []
             # iterate over rows matching missingness pattern
             for rowind, row in enumerate(origarr[inds]):
@@ -179,8 +182,10 @@ class imputable:
                     ],
                     return_distance=False,
                 )
-                # get array of nearest neighbors
-                means = np.mean(comparr[indexes[0][1:]], axis=0)
+                # Average all returned neighbors. The rows being imputed have
+                # missing values so are never in the complete-case set, meaning
+                # index 0 is a genuine nearest neighbor and must not be dropped.
+                means = np.mean(comparr[indexes[0]], axis=0)
                 # iterate over entries in each row
                 for ind, v in enumerate(row):
                     if not np.isnan(v):
@@ -220,6 +225,12 @@ class imputable:
         datavals = self.data.values
         # generate array of complete cases
         comparr = datavals[~np.isnan(datavals).any(axis=1)]
+        if len(comparr) == 0:
+            raise ValueError(
+                "KNN imputation requires at least one complete-case row (no "
+                "missing values) to learn from, but none were found. Lower the "
+                "missingness threshold or provide more complete observations."
+            )
 
         # find missingness patterns
         get_patterns(datavals)

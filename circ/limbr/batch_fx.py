@@ -1,10 +1,14 @@
 import itertools
+import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import multiprocess as _mp
 from circ.limbr._normalize import _pool_norm, _qnorm
+
+# Strips a leading ZT/CT prefix only (not occurrences elsewhere in the name).
+_TPOINT_PREFIX_RE = re.compile(r"^(?:ZT|CT)")
 
 _forkserver_pool = _mp.get_context("forkserver").Pool
 from sklearn import preprocessing
@@ -67,7 +71,7 @@ def _perm_worker(rseed: int) -> np.ndarray:
 
     n = min(len(tkstar), len(_perm_tks))
     out = np.zeros(len(_perm_tks))
-    out[:n] = tkstar[:n] > _perm_tks[:n]
+    out[:n] = tkstar[:n] >= _perm_tks[:n]
     return out
 
 
@@ -190,9 +194,7 @@ class sva:
 
         """
 
-        tpoints = [
-            i.replace("ZT", "").replace("CT", "") for i in self.data.columns.values
-        ]
+        tpoints = [_TPOINT_PREFIX_RE.sub("", str(i)) for i in self.data.columns.values]
         tpoints = [int(i.split("_")[0]) for i in tpoints]
         # deprecated splitting for alternative header syntax
         # tpoints = [int(i.split('.')[0]) for i in tpoints]
@@ -225,7 +227,12 @@ class sva:
             def autocorr_vec(m, shift):
                 """Row-wise autocorrelation of a 2-D array at a given shift."""
                 shifted = np.roll(m, shift, axis=1)
-                return np.einsum("ij,ij->i", m, shifted) / np.einsum("ij,ij->i", m, m)
+                num = np.einsum("ij,ij->i", m, shifted)
+                den = np.einsum("ij,ij->i", m, m)
+                # An all-zero row has zero sum-of-squares; define its
+                # autocorrelation as 0 rather than propagating NaN into the
+                # reduction threshold.
+                return np.divide(num, den, out=np.zeros_like(num), where=den != 0)
 
             tps = np.asarray(self.tpoints)
             unique_tps = np.unique(tps)
@@ -407,7 +414,7 @@ class sva:
             tkstar = self.get_tks(resstar)
             n = min(len(tkstar), len(self.tks))
             out = np.zeros(len(self.tks))
-            out[:n] = tkstar[:n] > self.tks[:n]
+            out[:n] = tkstar[:n] >= self.tks[:n]
             return out
 
         seeds = range(int(nperm))
@@ -429,7 +436,10 @@ class sva:
                 )
         else:
             output = [single_it(s) for s in tqdm(seeds, desc="permuting", smoothing=0)]
-        self.sigs = np.sum(np.asarray(output), axis=0) / float(nperm)
+        # Finite-sample-valid permutation p-value: (count + 1) / (nperm + 1),
+        # counting the observed statistic as one realisation. Avoids an
+        # anti-conservative significance of exactly 0.
+        self.sigs = (np.sum(np.asarray(output), axis=0) + 1) / (float(nperm) + 1)
 
     def eig_reg(self, alpha: float = 0.05) -> None:
         """
@@ -547,11 +557,14 @@ class sva:
             """
 
             pi_0 = est_pi_naught(probs_sig, l)
-            if pi_0 > 1:
-                return np.nan
             sp = np.sort(probs_sig)
-            pi_sig = sp[int(np.floor((1 - pi_0) * len(probs_sig)) - 1)]
-            return pi_sig
+            # Rows associated with the trend ≈ (1 - pi_0)·N. When the trend is
+            # ~null ((1 - pi_0)·N < 1, or pi_0 ≥ 1) this rounds to 0; the clamped
+            # index makes the cutoff the minimum p-value, so the strict `<`
+            # comparison admits no rows. The old code subtracted 1 first, wrapping
+            # to sp[-1] (the maximum) and admitting nearly every row.
+            idx = max(int(np.floor((1 - pi_0) * len(probs_sig))) - 1, 0)
+            return sp[idx]
 
         pt, _, bt = np.linalg.svd(self.res)
         trends: list[np.ndarray] = []
@@ -559,10 +572,8 @@ class sva:
         for j, entry in enumerate(tqdm(self.ps)):
             sub = []
             thresh = est_pi_sig(entry, lam)
-            if np.isnan(thresh):
-                self.ts: list[np.ndarray] = trends
-                self.pepts: list[np.ndarray] = pep_trends
-                return
+            # A ~null trend admits no rows (empty sub) and is simply skipped;
+            # remaining eigentrends must still be evaluated, so do not return.
             for i in range(len(entry)):
                 if entry[i] < thresh:
                     sub.append(self.data_reduced.values[i])
