@@ -314,8 +314,22 @@ class Classifier:
             if src_col in self.rhythm_results.columns:
                 result[dst_col] = self.rhythm_results[src_col]
 
-        pirs_cutoff = np.percentile(result["pirs_score"].dropna(), pirs_percentile)
+        # Genes PIRS dropped (all-zero rows, or ANOVA-filtered) carry a NaN
+        # pirs_score. Guard the percentile against an all-NaN column (#47),
+        # which would otherwise raise IndexError on the empty array.
+        scored = result["pirs_score"].dropna()
+        pirs_cutoff = np.percentile(scored, pirs_percentile) if len(scored) else np.nan
+        # NaN <= cutoff is False, so dropped genes default to non-stable.
         stable = result["pirs_score"] <= pirs_cutoff
+
+        # PIRS drops all-zero (perfectly flat) rows precisely because they are
+        # maximally constitutive; mark them stable so they aren't mislabeled
+        # variable/noisy_rhythmic (#38). ANOVA-dropped genes are left non-stable.
+        missing = result["pirs_score"].isna()
+        if missing.any():
+            common = result.index.intersection(self._source.index)
+            all_zero = (self._source.loc[common] == 0).all(axis=1)
+            stable.loc[all_zero.index[all_zero]] = True
 
         rhythmic = result["tau_mean"] >= tau_threshold
         if "emp_p" in result.columns:
