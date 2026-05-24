@@ -234,6 +234,18 @@ class TestWriteOutput:
         row_sums = tc["Circadian"] + tc["Linear"] + tc["Const"]
         assert (row_sums == 1).all()
 
+    def test_sidecar_stem_extensionless(self, tmp_path):
+        sim = simulate(nrows=20, tpoints=4, nreps=2, rseed=0)
+        out = str(tmp_path / "mysim")
+        sim.write_output(out_name=out)
+        assert os.path.exists(str(tmp_path / "mysim_true_classes.txt"))
+
+    def test_sidecar_stem_parquet_extension(self, tmp_path):
+        sim = simulate(nrows=20, tpoints=4, nreps=2, rseed=0)
+        out = str(tmp_path / "out.parquet")
+        sim.write_output(out_name=out)
+        assert os.path.exists(str(tmp_path / "out_true_classes.txt"))
+
 
 # ---------------------------------------------------------------------------
 # write_proteomics

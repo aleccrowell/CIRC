@@ -1,3 +1,4 @@
+import os
 import random
 import string
 
@@ -194,12 +195,12 @@ class simulate:
 
         Writes the scaled clean data to *out_name* and the per-row class
         labels to ``<stem>_true_classes.txt`` (where stem is *out_name*
-        with its final four characters removed).
+        with its extension removed).
         """
         df = pd.DataFrame(self.sim, columns=self.cols)
         df.index.name = "#"
         df.to_csv(out_name, sep="\t")
-        stem = out_name[:-4]
+        stem = os.path.splitext(out_name)[0]
         self._true_classes_df(index=df.index).to_csv(
             stem + "_true_classes.txt", sep="\t"
         )
