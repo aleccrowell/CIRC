@@ -71,9 +71,10 @@ class imputable:
         # Check whether the second column's first value ends in e.g. "T4" or "T24"
         # (a trailing digit preceded by "T"), which indicates peptides with
         # ZT/CT-suffixed charge states that need to be stripped before grouping.
-        if (self.data[self.data.columns.values[1]][0][-2] == "T") & (
-            self.data[self.data.columns.values[1]][0][-1].isdigit()
-        ):
+        # Use positional access — a DataFrame input may carry a non-default index
+        # for which label 0 does not exist.
+        first_val = self.data[self.data.columns.values[1]].iloc[0]
+        if (first_val[-2] == "T") & (first_val[-1].isdigit()):
             self.data[self.data.columns.values[1]] = self.data[
                 self.data.columns.values[1]
             ].apply(lambda x: x.split("T")[0])

@@ -103,8 +103,19 @@ def test_init_accepts_multiindex_dataframe(imputation_file):
 
 
 # ---------------------------------------------------------------------------
-# Regression tests: KNN neighbor handling (#39, #40)
+# Regression tests: deduplicate + KNN neighbor handling (#39, #40, #49)
 # ---------------------------------------------------------------------------
+
+
+def test_deduplicate_with_nondefault_index(imputation_file):
+    # #49: deduplicate() looked up the second column by integer label 0, which
+    # raised KeyError for a DataFrame whose index is neither a RangeIndex nor a
+    # MultiIndex. Positional access fixes it.
+    df = pd.read_csv(imputation_file, sep="\t")
+    df.index = [f"row_{i}" for i in range(len(df))]
+    obj = imputable(df, missingness=0.5)
+    obj.deduplicate()
+    assert isinstance(obj.data.index, pd.MultiIndex)
 
 
 def test_impute_keeps_nearest_neighbor(tmp_path):
