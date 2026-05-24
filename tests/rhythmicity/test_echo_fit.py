@@ -139,6 +139,17 @@ class TestEchoFitterInit:
         # 12 unique timepoints → 12 columns in means DataFrame
         assert fitter._y_means.shape == (5, 12)
 
+    def test_duplicate_gene_ids_aggregated(self):
+        # #43: duplicate gene IDs made .loc[gene_id] return a 2-D frame and
+        # crash fit() with IndexError. They are now averaged into one profile.
+        df = _make_oscillation_df(gamma_norm=0.0, n_genes=3)
+        df.index = ["g1", "g1", "g2"]
+        df.index.name = "#"
+        fitter = EchoFitter(df)
+        assert not fitter._y_means.index.has_duplicates
+        result = fitter.fit()  # must not raise
+        assert set(result.index) == {"g1", "g2"}
+
 
 # ---------------------------------------------------------------------------
 # Tests: fit() output structure
