@@ -89,6 +89,13 @@ class TestParseTimepoints:
         result = _parse_timepoints(cols)
         np.testing.assert_array_equal(result, [100.0, 120.0, 140.0])
 
+    def test_strips_prefix_only_not_embedded(self):
+        # #52: the old global .replace("ZT","") turned 'ZTZT12_1' into '12';
+        # anchored stripping removes only the leading ZT, leaving 'ZT12', which
+        # is not a valid timepoint token, so parsing must fail loudly.
+        with pytest.raises(ValueError):
+            _parse_timepoints(["ZTZT12_1"])
+
 
 # ---------------------------------------------------------------------------
 # Tests: EchoFitter instantiation
@@ -131,6 +138,17 @@ class TestEchoFitterInit:
         fitter = EchoFitter(df)
         # 12 unique timepoints → 12 columns in means DataFrame
         assert fitter._y_means.shape == (5, 12)
+
+    def test_duplicate_gene_ids_aggregated(self):
+        # #43: duplicate gene IDs made .loc[gene_id] return a 2-D frame and
+        # crash fit() with IndexError. They are now averaged into one profile.
+        df = _make_oscillation_df(gamma_norm=0.0, n_genes=3)
+        df.index = ["g1", "g1", "g2"]
+        df.index.name = "#"
+        fitter = EchoFitter(df)
+        assert not fitter._y_means.index.has_duplicates
+        result = fitter.fit()  # must not raise
+        assert set(result.index) == {"g1", "g2"}
 
 
 # ---------------------------------------------------------------------------

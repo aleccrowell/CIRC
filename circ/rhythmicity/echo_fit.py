@@ -26,6 +26,7 @@ circadian output. Bioinformatics, 36(3), 773–781.
 """
 
 import multiprocessing
+import re
 
 _mp_ctx = multiprocessing.get_context("forkserver")
 
@@ -37,6 +38,9 @@ import pandas as pd
 from scipy.optimize import curve_fit
 from scipy.stats import kendalltau
 from statsmodels.stats.multitest import multipletests
+
+# Strips a leading ZT/CT prefix only (not occurrences elsewhere in the name).
+_TPOINT_PREFIX_RE = re.compile(r"^(?:ZT|CT)")
 
 # γ classification thresholds (dimensionless; meaningful in normalised time)
 _GAMMA_DAMPED_THRESHOLD = 0.03
@@ -88,7 +92,7 @@ def _parse_timepoints(columns) -> np.ndarray:
     """Extract numeric timepoint values from ZT/CT-prefixed column names."""
     tpoints = []
     for col in columns:
-        c = str(col).replace("ZT", "").replace("CT", "")
+        c = _TPOINT_PREFIX_RE.sub("", str(col))
         tpoints.append(int(c.split("_")[0]))
     return np.array(tpoints, dtype=float)
 
@@ -222,6 +226,11 @@ class EchoFitter:
             mask = tpoints == t
             mean_cols[t] = self.data.iloc[:, mask].mean(axis=1)
         means_df = pd.DataFrame(mean_cols, index=self.data.index)
+        # Duplicate gene IDs would make .loc[gene_id] return a 2-D frame and
+        # crash _fit_gene; aggregate them by averaging (matching imputable's
+        # dedup behavior) so each gene yields a single 1-D profile.
+        if means_df.index.has_duplicates:
+            means_df = means_df.groupby(level=0).mean()
 
         t_raw = np.array(unique_times, dtype=float)
         t_min = t_raw[0]
