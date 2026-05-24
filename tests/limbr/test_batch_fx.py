@@ -192,3 +192,61 @@ def test_init_accepts_parquet(tmp_path, rnaseq_file):
     obj = sva(path, design="c", data_type="r")
     assert isinstance(obj.raw_data, pd.DataFrame)
     pd.testing.assert_frame_equal(obj.raw_data, df)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for code-review fixes
+# ---------------------------------------------------------------------------
+
+
+def test_prim_cor_all_zero_row_no_nan(rnaseq_file):
+    # #48: an all-zero per-timepoint-mean row used to divide by zero in the
+    # autocorrelation, propagating NaN into the reduction threshold.
+    obj = sva(rnaseq_file, design="c", data_type="r")
+    obj.pool_normalize()
+    obj.get_tpoints()
+    obj.data.iloc[0, :] = 0.0
+    obj.prim_cor()
+    assert not np.isnan(obj.cors).any()
+
+
+def test_perm_test_sigs_never_zero(rnaseq_file):
+    # #50: significance is (count + 1) / (nperm + 1), so it can never be 0.
+    obj = sva(rnaseq_file, design="c", data_type="r")
+    obj.preprocess_default()
+    nperm = 5
+    obj.perm_test(nperm=nperm)
+    assert (obj.sigs >= 1.0 / (nperm + 1) - 1e-12).all()
+
+
+def test_subset_svd_processes_trends_after_null(rnaseq_file):
+    # #46: a ~null trend (pi_0 > 1) used to trigger an early return, abandoning
+    # all later eigentrends. It must instead admit no rows and continue.
+    obj = sva(rnaseq_file, design="c", data_type="r")
+    rng = np.random.default_rng(0)
+    obj.res = rng.standard_normal((5, 6))
+    obj.data_reduced = pd.DataFrame(
+        rng.standard_normal((5, 6)), index=[f"g{i}" for i in range(5)]
+    )
+    # Trend 0 is ~null (pi_0 > 1 -> admits nothing); trend 1 carries signal.
+    obj.ps = [
+        [0.9, 0.9, 0.9, 0.9, 0.9],
+        [0.001, 0.002, 0.003, 0.004, 0.9],
+    ]
+    obj.subset_svd()
+    assert len(obj.ts) == 1
+    assert len(obj.pepts) == 1
+
+
+def test_get_tpoints_strips_prefix_only(tmp_path):
+    # #61: embedded ZT/CT must not be stripped from the time token.
+    cols = ["ZTZT12_1", "ZTZT18_1"]
+    df = pd.DataFrame(np.random.randn(4, len(cols)), columns=cols)
+    df.index = [f"gene_{i}" for i in range(4)]
+    df.index.name = "#"
+    path = str(tmp_path / "embedded.txt")
+    df.to_csv(path, sep="\t")
+    obj = sva(path, design="c", data_type="r")
+    obj.pool_normalize()
+    with pytest.raises(ValueError):
+        obj.get_tpoints()
