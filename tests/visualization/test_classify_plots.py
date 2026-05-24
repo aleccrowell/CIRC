@@ -178,6 +178,21 @@ class TestVolcano:
         returned = volcano(full_clf, ax=ax)
         assert returned is ax
 
+    def test_quadrant_captions_match_label_map(self, full_clf):
+        # x-axis is PIRS score: low (left) = stable; y-axis is rhythmicity
+        # significance: high (top) = rhythmic. Captions must agree with the
+        # classifier's own _LABEL_MAP, drawn by point colour.
+        from circ.expression_classification.classify import _LABEL_MAP
+
+        ax = volcano(full_clf)
+        captions = {t.get_text(): t.get_position() for t in ax.texts}
+        assert captions["constitutive"] == pytest.approx((0.02, 0.04))  # stable, arr
+        assert captions["variable"] == pytest.approx((0.98, 0.04))  # unstable, arr
+        assert captions["rhythmic"] == pytest.approx((0.02, 0.96))  # stable, rhythmic
+        assert captions["noisy_rhythmic"] == pytest.approx((0.98, 0.96))  # unstable
+        assert _LABEL_MAP[(True, True)] == "rhythmic"
+        assert _LABEL_MAP[(False, True)] == "noisy_rhythmic"
+
 
 # ---------------------------------------------------------------------------
 # pirs_score_distribution
