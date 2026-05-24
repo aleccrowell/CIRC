@@ -229,6 +229,53 @@ class TestClassify:
         assert n_strict <= n_lenient
 
 
+class TestNanPirsHandling:
+    """PIRS drops some genes (all-zero rows, ANOVA filter), leaving NaN
+    pirs_score after the union with BooteJTK results."""
+
+    def _src(self):
+        src = pd.DataFrame(
+            [[1, 2, 3, 4], [4, 3, 2, 1], [2, 2.5, 2, 2.5], [0, 0, 0, 0]],
+            index=["g1", "g2", "g3", "g_zero"],
+            columns=["ZT00_1", "ZT06_1", "ZT12_1", "ZT18_1"],
+        )
+        src.index.name = "#"
+        return src
+
+    def test_all_zero_row_labeled_constitutive(self):
+        # #38: PIRS drops the all-zero row (maximally constitutive); it must be
+        # labeled constitutive, not variable/noisy_rhythmic.
+        clf = Classifier(self._src())
+        clf.pirs_scores = pd.DataFrame(
+            {"score": [0.1, 0.2, 0.3]}, index=["g1", "g2", "g3"]
+        )
+        clf.pirs_scores.index.name = "#"
+        clf.rhythm_results = pd.DataFrame(
+            {"TauMean": [0.1] * 4}, index=["g1", "g2", "g3", "g_zero"]
+        )
+        out = clf.classify(pirs_percentile=80, tau_threshold=0.5)
+        assert np.isnan(out.loc["g_zero", "pirs_score"])
+        assert out.loc["g_zero", "label"] == "constitutive"
+
+    def test_empty_pirs_scores_does_not_crash(self):
+        # #47: every gene's pirs_score is NaN -> np.percentile on an empty array
+        # used to raise IndexError.
+        src = pd.DataFrame(
+            [[1.0, 2.0, 3.0, 4.0]],
+            index=["g1"],
+            columns=["ZT00_1", "ZT06_1", "ZT12_1", "ZT18_1"],
+        )
+        src.index.name = "#"
+        clf = Classifier(src)
+        clf.pirs_scores = pd.DataFrame(
+            {"score": pd.Series([], dtype=float)}, index=pd.Index([], name="#")
+        )
+        clf.rhythm_results = pd.DataFrame({"TauMean": [0.9]}, index=["g1"])
+        out = clf.classify(pirs_percentile=50, tau_threshold=0.5)
+        assert "label" in out.columns
+        assert len(out) == 1
+
+
 # ---------------------------------------------------------------------------
 # Integration test: run_all()
 # ---------------------------------------------------------------------------
