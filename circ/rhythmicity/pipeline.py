@@ -40,6 +40,7 @@ from .limma_preprocess import prepare_timeseries, write_limma_outputs
 from .limma_voom import run_vooma_ebayes, run_vooma_vash
 
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+_REF_DIR = os.path.join(_PKG_DIR, "ref_files")
 _NULL_CACHE_DIR = Path.home() / ".cache" / "circ" / "null_cache"
 
 
@@ -442,7 +443,7 @@ def __create_parser__():
         type=str,
         metavar="filename string",
         action="store",
-        default="widths_02-22.txt",
+        default=os.path.join(_REF_DIR, "asymmetries_02-22_by2.txt"),
         # choices=["widths_02-22.txt","widths_04-20_by4.txt","widths_04-12-20.txt","widths_08-16.txt","width_12.txt"]
         help='Should be a file with asymmetries (widths) you wish to search for listed in a single column separated by newlines.\
                           Provided files include files like "widths_02-22.txt","widths_04-20_by4.txt","widths_04-12-20.txt","widths_08-16.txt","width_12.txt"\nasymmetries=widths',
@@ -454,7 +455,7 @@ def __create_parser__():
         dest="phase",
         metavar="filename string",
         type=str,
-        default="phases_00-22_by2.txt",
+        default=os.path.join(_REF_DIR, "phases_00-22_by2.txt"),
         help='Should be a file with phases you wish to search for listed in a single column separated by newlines.\
                           Example files include "phases_00-22_by2.txt" or "phases_00-22_by4.txt" or "phases_00-20_by4.txt"',
     )
@@ -466,9 +467,9 @@ def __create_parser__():
         metavar="filename string",
         type=str,
         action="store",
-        default="period_24.txt",
+        default=os.path.join(_REF_DIR, "period24.txt"),
         help='Should be a file with phases you wish to search for listed in a single column separated by newlines.\
-                          Provided file is "period_24.txt"',
+                          Provided file is "period24.txt"',
     )
 
     analysis.add_argument(

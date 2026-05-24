@@ -89,6 +89,13 @@ class TestParseTimepoints:
         result = _parse_timepoints(cols)
         np.testing.assert_array_equal(result, [100.0, 120.0, 140.0])
 
+    def test_strips_prefix_only_not_embedded(self):
+        # #52: the old global .replace("ZT","") turned 'ZTZT12_1' into '12';
+        # anchored stripping removes only the leading ZT, leaving 'ZT12', which
+        # is not a valid timepoint token, so parsing must fail loudly.
+        with pytest.raises(ValueError):
+            _parse_timepoints(["ZTZT12_1"])
+
 
 # ---------------------------------------------------------------------------
 # Tests: EchoFitter instantiation

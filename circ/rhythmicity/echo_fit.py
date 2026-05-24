@@ -26,6 +26,7 @@ circadian output. Bioinformatics, 36(3), 773–781.
 """
 
 import multiprocessing
+import re
 
 _mp_ctx = multiprocessing.get_context("forkserver")
 
@@ -37,6 +38,9 @@ import pandas as pd
 from scipy.optimize import curve_fit
 from scipy.stats import kendalltau
 from statsmodels.stats.multitest import multipletests
+
+# Strips a leading ZT/CT prefix only (not occurrences elsewhere in the name).
+_TPOINT_PREFIX_RE = re.compile(r"^(?:ZT|CT)")
 
 # γ classification thresholds (dimensionless; meaningful in normalised time)
 _GAMMA_DAMPED_THRESHOLD = 0.03
@@ -88,7 +92,7 @@ def _parse_timepoints(columns) -> np.ndarray:
     """Extract numeric timepoint values from ZT/CT-prefixed column names."""
     tpoints = []
     for col in columns:
-        c = str(col).replace("ZT", "").replace("CT", "")
+        c = _TPOINT_PREFIX_RE.sub("", str(col))
         tpoints.append(int(c.split("_")[0]))
     return np.array(tpoints, dtype=float)
 
