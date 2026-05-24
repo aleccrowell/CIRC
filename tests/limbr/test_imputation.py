@@ -100,3 +100,13 @@ def test_init_accepts_multiindex_dataframe(imputation_file):
     # MultiIndex should have been reset to flat columns for deduplicate()
     assert "Peptide" in obj.data.columns
     assert "Protein" in obj.data.columns
+
+
+def test_deduplicate_works_with_nondefault_index(imputation_file):
+    """Regression: deduplicate() raised KeyError on DataFrames with a
+    non-default index (not RangeIndex or MultiIndex)."""
+    df = pd.read_csv(imputation_file, sep="\t")
+    df.index = [f"row_{i}" for i in range(len(df))]
+    obj = imputable(df, missingness=0.5)
+    obj.deduplicate()
+    assert isinstance(obj.data.index, pd.MultiIndex)
