@@ -71,6 +71,12 @@ class TestReadExpression:
         result = read_expression(path, data_type="p")
         pd.testing.assert_frame_equal(result, prot_df)
 
+    def test_read_parquet_uppercase_extension(self, tmp_path, expr_df):
+        path = str(tmp_path / "expr.PARQUET")
+        expr_df.to_parquet(path)
+        result = read_expression(path)
+        pd.testing.assert_frame_equal(result, expr_df)
+
 
 # ---------------------------------------------------------------------------
 # write_expression
@@ -101,6 +107,13 @@ class TestWriteExpression:
         write_expression(expr_df, path)
         result = read_expression(path)
         pd.testing.assert_frame_equal(result, expr_df)
+
+    def test_write_parquet_uppercase_extension(self, tmp_path, expr_df):
+        path = str(tmp_path / "out.PARQUET")
+        write_expression(expr_df, path)
+        with open(path, "rb") as fh:
+            assert fh.read(4) == b"PAR1"
+        pd.testing.assert_frame_equal(read_expression(path), expr_df)
 
 
 # ---------------------------------------------------------------------------

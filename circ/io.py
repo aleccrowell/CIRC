@@ -27,7 +27,7 @@ def read_expression(
     if isinstance(source, pd.DataFrame):
         return source.copy()
     path = str(source)
-    if path.endswith(".parquet"):
+    if Path(path).suffix.lower() == ".parquet":
         return pd.read_parquet(path)
     if data_type == "p":
         return pd.read_csv(path, sep="\t").set_index(["Peptide", "Protein"])
@@ -46,7 +46,7 @@ def write_expression(df: pd.DataFrame, path: str | Path) -> None:
     path : str | Path
     """
     path = str(path)
-    if path.endswith(".parquet"):
+    if Path(path).suffix.lower() == ".parquet":
         df.to_parquet(path)
     else:
         df.to_csv(path, sep="\t")
