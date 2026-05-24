@@ -314,7 +314,11 @@ class Classifier:
             if src_col in self.rhythm_results.columns:
                 result[dst_col] = self.rhythm_results[src_col]
 
-        pirs_cutoff = np.percentile(result["pirs_score"].dropna(), pirs_percentile)
+        pirs_scores_clean = result["pirs_score"].dropna()
+        if len(pirs_scores_clean) == 0:
+            result["label"] = "unclassified"
+            return result
+        pirs_cutoff = np.percentile(pirs_scores_clean, pirs_percentile)
         stable = result["pirs_score"] <= pirs_cutoff
 
         rhythmic = result["tau_mean"] >= tau_threshold

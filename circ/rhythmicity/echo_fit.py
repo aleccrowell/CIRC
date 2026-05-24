@@ -222,6 +222,9 @@ class EchoFitter:
             mask = tpoints == t
             mean_cols[t] = self.data.iloc[:, mask].mean(axis=1)
         means_df = pd.DataFrame(mean_cols, index=self.data.index)
+        # Deduplicate gene IDs by averaging rows with the same index.
+        if means_df.index.duplicated().any():
+            means_df = means_df.groupby(level=0).mean()
 
         t_raw = np.array(unique_times, dtype=float)
         t_min = t_raw[0]
