@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 import pandas as pd
 import os
+from scipy.stats import t as t_dist
 
-from circ.pirs.rank import ranker, rsd_ranker
+from circ.pirs.rank import ranker, rsd_ranker, _pirs_score
 
 
 class TestRankerInit:
@@ -69,6 +70,18 @@ class TestGetTpoints:
         r = ranker(df)
         r.get_tpoints()
         assert sorted(np.unique(r.tpoints).tolist()) == [100, 104, 108]
+
+    def test_strips_prefix_only_not_embedded(self):
+        # The old global .replace("ZT","") turned 'ZTZT12_1' into '12'; anchored
+        # stripping removes only the leading ZT, leaving 'ZT12' which is not a
+        # valid timepoint token, so parsing must fail loudly rather than corrupt.
+        df = pd.DataFrame(
+            {"ZTZT12_1": [1.0, 2.0], "ZTZT18_1": [1.5, 2.5]},
+            index=pd.Index(["gene_a", "gene_b"], name="#"),
+        )
+        r = ranker(df, anova=False)
+        with pytest.raises(ValueError):
+            r.get_tpoints()
 
 
 class TestRemoveAnova:
@@ -439,3 +452,48 @@ class TestRsdRanker:
         assert os.path.exists(out)
         written = pd.read_csv(out, sep="\t", index_col=0)
         assert "score" in written.columns
+
+
+class TestPirsScoreFormula:
+    """Locks in #51: residual df = n_obs - 2 and the fine grid includes the
+    max timepoint."""
+
+    def _reference_score(self, y, tpoints, df_resid):
+        X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
+        beta = np.linalg.pinv(X_obs) @ y
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
+        X_fine = np.column_stack([np.ones(len(x_fine)), x_fine])
+        n = len(y)
+        rss = np.sum((y - X_obs @ beta) ** 2)
+        s = np.sqrt(max(rss, 1e-28) / df_resid)
+        tcrit = t_dist.ppf(0.975, df_resid)
+        xm = np.mean(tpoints)
+        Sxx = np.sum((tpoints - xm) ** 2)
+        lev = 1.0 + 1.0 / n + (x_fine - xm) ** 2 / Sxx
+        half = tcrit * s * np.sqrt(lev)
+        yhat = X_fine @ beta
+        mean_expr = np.mean(y)
+        dev = np.max(
+            np.maximum(np.abs(yhat + half - mean_expr), np.abs(yhat - half - mean_expr))
+        )
+        return dev / abs(mean_expr)
+
+    def test_uses_observation_residual_df(self):
+        # 3 unique timepoints, 2 reps each -> 6 observations.
+        tpoints = np.array([0.0, 0.0, 2.0, 2.0, 4.0, 4.0])
+        y = np.array([1.0, 1.2, 2.0, 2.1, 3.0, 2.9])
+        X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
+        X_pinv = np.linalg.pinv(X_obs)
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
+        X_fine = np.column_stack([np.ones(len(x_fine)), x_fine])
+
+        score = _pirs_score(y, X_pinv, X_obs, X_fine)
+
+        # df = n_obs - 2 = 4 (correct), not unique_timepoints - 2 = 1 (buggy).
+        assert score == pytest.approx(self._reference_score(y, tpoints, df_resid=4))
+        assert score != pytest.approx(self._reference_score(y, tpoints, df_resid=1))
+
+    def test_fine_grid_includes_endpoint(self):
+        tpoints = np.array([2.0, 4.0, 6.0, 8.0])
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
+        assert x_fine.max() >= max(tpoints) - 1e-9

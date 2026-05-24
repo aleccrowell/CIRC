@@ -1,7 +1,11 @@
 import multiprocessing
+import re
 
 # forkserver avoids re-importing the full package in every worker on Linux/macOS
 _mp_ctx = multiprocessing.get_context("forkserver")
+
+# Strips a leading ZT/CT prefix only (not occurrences elsewhere in the name).
+_TPOINT_PREFIX_RE = re.compile(r"^(?:ZT|CT)")
 
 from pathlib import Path
 from typing import Any
@@ -23,7 +27,6 @@ def _pirs_score(
     X_pinv: np.ndarray,
     X_obs: np.ndarray,
     X_fine: np.ndarray,
-    dof: int,
 ) -> float:
     """PIRS score for a single expression vector.
 
@@ -41,7 +44,6 @@ def _pirs_score(
     X_pinv : ndarray (2, n_obs)  — pseudoinverse of design matrix
     X_obs  : ndarray (n_obs, 2)  — design matrix at observed timepoints
     X_fine : ndarray (n_fine, 2) — design matrix at fine grid
-    dof    : int  — number of unique timepoints (used as df for residual SE)
     """
     n = len(y)
     beta = X_pinv @ y
@@ -52,7 +54,9 @@ def _pirs_score(
     denom = abs(mean_expr) if abs(mean_expr) > 1e-10 else 1.0
 
     rss = np.sum((y - y_hat_obs) ** 2)
-    df_resid = max(dof - 2, 1)
+    # Residual df = observations − fitted params (slope + intercept), not the
+    # number of unique timepoints — replicates contribute residual df too.
+    df_resid = max(n - 2, 1)
     s = np.sqrt(max(rss, 1e-28) / df_resid)
     t_crit = t_dist.ppf(0.975, df_resid)
 
@@ -75,9 +79,7 @@ def _pirs_score(
 
 
 def _permutation_worker(
-    args: tuple[
-        Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, float, int, int
-    ],
+    args: tuple[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int, int],
 ) -> tuple[Any, float]:
     """Multiprocessing worker: permute y n_permutations times, return p-value.
 
@@ -88,13 +90,13 @@ def _permutation_worker(
     widening the PI bounds).  Small p therefore means significantly
     non-constitutive.
     """
-    gene_id, y, X_pinv, X_obs, X_fine, dof, obs_score, n_perm, seed = args
+    gene_id, y, X_pinv, X_obs, X_fine, obs_score, n_perm, seed = args
     rng = np.random.default_rng(seed)
     y_perm = y.copy()
     count_le = 0
     for _ in range(n_perm):
         rng.shuffle(y_perm)
-        if _pirs_score(y_perm, X_pinv, X_obs, X_fine, dof) <= obs_score:
+        if _pirs_score(y_perm, X_pinv, X_obs, X_fine) <= obs_score:
             count_le += 1
     # Include the observed value as one realisation of the permutation distribution
     return gene_id, (count_le + 1) / (n_perm + 1)
@@ -185,7 +187,7 @@ class ranker:
         """Extract numeric timepoints from column headers (ZT/CT prefix)."""
         result = []
         for col in self.data.columns.values:
-            stripped = str(col).replace("ZT", "").replace("CT", "")
+            stripped = _TPOINT_PREFIX_RE.sub("", str(col))
             try:
                 result.append(int(stripped.split("_")[0]))
             except ValueError:
@@ -232,8 +234,9 @@ class ranker:
             Index = gene IDs, column ``score``, sorted ascending.
         """
         tpoints = self.tpoints
-        dof = len(np.unique(tpoints))
-        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
+        # Half-open arange excludes max(tpoints); add a step so the endpoint
+        # (which has equal leverage to the included min endpoint) is evaluated.
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
 
         # Pre-compute design matrices — shared across all genes
         X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
@@ -243,7 +246,7 @@ class ranker:
         es = {}
         for index in tqdm(range(len(self.data))):
             y = np.array(self.data.iloc[index], dtype=float)
-            es[index] = _pirs_score(y, X_pinv, X_obs, X_fine_m, dof)
+            es[index] = _pirs_score(y, X_pinv, X_obs, X_fine_m)
 
         self.errors = pd.DataFrame.from_dict(es, orient="index")
         self.errors.columns = ["score"]
@@ -284,8 +287,7 @@ class ranker:
             raise RuntimeError("Call calculate_scores() before calculate_pvals().")
 
         tpoints = self.tpoints
-        dof = len(np.unique(tpoints))
-        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
 
         X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
         X_pinv = np.linalg.pinv(X_obs)
@@ -299,7 +301,6 @@ class ranker:
                 X_pinv,
                 X_obs,
                 X_fine_m,
-                dof,
                 float(self.errors.loc[gene_id, "score"]),
                 n_permutations,
                 i,
@@ -367,7 +368,7 @@ class ranker:
             )
 
         tpoints = self.tpoints
-        x_fine = np.arange(min(tpoints), max(tpoints), 0.1)
+        x_fine = np.arange(min(tpoints), max(tpoints) + 0.1, 0.1)
 
         X_obs = np.column_stack([np.ones(len(tpoints)), tpoints])
         X_pinv = np.linalg.pinv(X_obs)
