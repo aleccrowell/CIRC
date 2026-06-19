@@ -13,11 +13,11 @@ dependencies = [
     "numpy>=2.4.6",
     "pandas>=3.0.3",
     "scipy>=1.17",
-    "scikit-learn>=1.8",
+    "scikit-learn>=1.9.0",
     "statsmodels>=0.14",
-    "tqdm>=4.67",
+    "tqdm>=4.68.3",
     "multiprocess>=0.70",
-    "matplotlib>=3.10",
+    "matplotlib>=3.11.0",
     "pyarrow>=23.0.1",
     "seaborn>=0.11",
     "rich (>=15.0.0,<16.0.0)",
@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 fast = ["numba>=0.50.0"]
-interactive = ["plotly>=6.0", "ipykernel>=6.0"]
+interactive = ["plotly>=6.8.0", "ipykernel>=7.3.0"]
 
 [project.scripts]
 circ = "circ.cli:main"
@@ -67,4 +67,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["pytest>=9.0.3", "plotly>=6.0", "ruff (>=0.15.15,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
+dev = ["pytest>=9.1.1", "plotly>=6.8.0", "ruff (>=0.15.18,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
