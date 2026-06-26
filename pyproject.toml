@@ -67,4 +67,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["pytest>=9.1.1", "plotly>=6.8.0", "ruff (>=0.15.18,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
+dev = ["pytest>=9.1.1", "plotly>=6.8.0", "ruff (>=0.15.20,<0.16.0)", "mypy (>=1.20.2,<2.0.0)", "pytest-cov (>=7.1.0,<8.0.0)"]
