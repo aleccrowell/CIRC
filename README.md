@@ -284,16 +284,19 @@ Full license texts and attribution details are in `NOTICE`.
 
 ### Key publications
 
-- **LIMBR**: Crowell AM et al. "Leveraging information across HeLa cell
-  circadian proteomics experiments using a Bayesian multi-study factor
-  model." *Molecular & Cellular Proteomics* 2020.
-- **BooteJTK**: Hutchison AL, Maienschein-Cline M, Chiang AH et al.
-  "Improved statistical methods enable greater sensitivity in rhythm
-  detection for genome-wide data." *PLoS Computational Biology* 2015
-  11(3): e1004094. doi:10.1371/journal.pcbi.1004094
-- **BooteJTK (bootstrap extension)**: Hutchison AL et al. "BooteJTK:
-  Improved Rhythm Detection via Bootstrapping." *bioRxiv* 2016.
-- **ECHO**: De los Santos H et al. "ECHO: an application for detection
-  and analysis of oscillators identifies metabolic regulation on genome-wide
-  circadian output." *Bioinformatics* 2019 36(3): 773–781.
-  doi:10.1093/bioinformatics/btz617
+- **LIMBR**: Crowell AM, Greene CS, Loros JJ, Dunlap JC. "Learning and
+  Imputation for Mass-spec Bias Reduction (LIMBR)." *Bioinformatics* 2019
+  35(9): 1518–1526. doi:10.1093/bioinformatics/bty828
+- **BooteJTK**: Hutchison AL, Allada R, Dinner AR. "Bootstrapping and
+  Empirical Bayes Methods Improve Rhythm Detection in Sparsely Sampled
+  Data." *Journal of Biological Rhythms* 2018 33(4): 339–349.
+  doi:10.1177/0748730418789536
+- **eJTK** (the method BooteJTK builds on): Hutchison AL,
+  Maienschein-Cline M, Chiang AH et al. "Improved statistical methods
+  enable greater sensitivity in rhythm detection for genome-wide data."
+  *PLoS Computational Biology* 2015 11(3): e1004094.
+  doi:10.1371/journal.pcbi.1004094
+- **ECHO**: De los Santos H, Collins EJ, Mann C et al. "ECHO: an
+  application for detection and analysis of oscillators identifies
+  metabolic regulation on genome-wide circadian output." *Bioinformatics*
+  2020 36(3): 773–781. doi:10.1093/bioinformatics/btz617
